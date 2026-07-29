@@ -1,0 +1,52 @@
+name: Sonara
+options:
+  bundleIdPrefix: com.mhr
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  Sonara:
+    type: application
+    platform: iOS
+    sources:
+      - path: .
+        excludes:
+          - "*Tests.swift"
+          - "project.yml"
+          - "codemagic.yaml"
+          - "README.md"
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.mhr.sonara
+        PRODUCT_NAME: Sonara
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.9"
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Sonara
+    info:
+      path: Info.plist
+      properties:
+        CFBundleDisplayName: Sonara
+        CFBundleURLTypes:
+          - CFBundleURLSchemes: [auth-redirect]
+            CFBundleURLName: com.mhr.sonara.auth
+        LSApplicationQueriesSchemes: [spotify]
+        UILaunchScreen: {}
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+    scheme:
+      testTargets: [SonaraTests]
+  SonaraTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: .
+        includes:
+          - "*Tests.swift"
+    dependencies:
+      - target: Sonara
