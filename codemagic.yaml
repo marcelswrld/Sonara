@@ -35,31 +35,11 @@ workflows:
         script: brew install xcodegen
       - name: Generate Xcode project
         script: xcodegen generate
-      - name: Initialize keychain
-        script: keychain initialize
-      - name: Create distribution certificate (if none exists)
-        script: |
-          # A profile can't exist without a signing certificate. Create or
-          # fetch the distribution cert FIRST, then the profile can attach to it.
-          app-store-connect certificates create \
-            --type IOS_DISTRIBUTION \
-            --save || \
-          app-store-connect certificates list \
-            --type IOS_DISTRIBUTION \
-            --save
-      - name: Create App ID (if needed) and signing profile
-        script: |
-          app-store-connect fetch-signing-files com.mhr.sonara \
-            --type IOS_APP_STORE \
-            --create
-      - name: Add certificates to keychain and apply profiles
-        script: |
-          keychain add-certificates
-          xcode-project use-profiles
       - name: Set unique build number
         script: agvtool new-version -all $(($BUILD_NUMBER + 1)) || true
       - name: Build signed IPA
         script: |
+          xcode-project use-profiles
           xcode-project build-ipa \
             --project Sonara.xcodeproj \
             --scheme Sonara
