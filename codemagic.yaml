@@ -21,32 +21,74 @@ workflows:
 
   sonara-testflight:
     name: Sonara - TestFlight
-    max_build_duration: 45
+    max_build_duration: 60
     instance_type: mac_mini_m2
-    integrations:
-      app_store_connect: codemagic
     environment:
+      groups:
+        - appstore
       xcode: 16.2
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.mhr.sonara
     scripts:
       - name: Install XcodeGen
         script: brew install xcodegen
       - name: Generate Xcode project
         script: xcodegen generate
+
+      - name: Set up App Store Connect key file
+        script: |
+          # Write the .p8 key from the env var to a file the CLI can read.
+          mkdir -p $HOME/private_keys
+          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > $HOME/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8
+          echo "Key file written for Key ID: $APP_STORE_CONNECT_KEY_IDENTIFIER"
+
+      - name: Initialize keychain
+        script: keychain initialize
+
+      - name: Fetch or create distribution certificate
+        script: |
+          app-store-connect certificates create \
+            --type IOS_DISTRIBUTION \
+            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
+            --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            --private-key "$APP_STORE_CONNECT_PRIVATE_KEY" \
+            --save \
+          || app-store-connect certificates list \
+            --type IOS_DISTRIBUTION \
+            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
+            --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            --private-key "$APP_STORE_CONNECT_PRIVATE_KEY" \
+            --save
+
+      - name: Create App ID and fetch/create provisioning profile
+        script: |
+          app-store-connect fetch-signing-files com.mhr.sonara \
+            --platform IOS \
+            --type IOS_APP_STORE \
+            --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
+            --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+            --private-key "$APP_STORE_CONNECT_PRIVATE_KEY" \
+            --create
+
+      - name: Add certificates to keychain and apply profiles
+        script: |
+          keychain add-certificates
+          xcode-project use-profiles
+
       - name: Set unique build number
         script: agvtool new-version -all $(($BUILD_NUMBER + 1)) || true
+
       - name: Build signed IPA
         script: |
-          xcode-project use-profiles
           xcode-project build-ipa \
             --project Sonara.xcodeproj \
             --scheme Sonara
+
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
+
     publishing:
       app_store_connect:
-        auth: integration
+        api_key: $APP_STORE_CONNECT_PRIVATE_KEY
+        key_id: $APP_STORE_CONNECT_KEY_IDENTIFIER
+        issuer_id: $APP_STORE_CONNECT_ISSUER_ID
         submit_to_testflight: true
