@@ -38,9 +38,11 @@ workflows:
 
       - name: Generate a certificate private key
         script: |
-          # A distribution certificate is built from a key pair. Create the
-          # private key first; every signing command below points at it.
-          app-store-connect certificates create-key --save
+          # Distribution certs are built from an RSA key pair. The CLI has no
+          # key-gen subcommand, so make one with openssl (always present).
+          mkdir -p $HOME/certs
+          openssl genrsa -out $HOME/certs/cert_key.pem 2048
+          echo "Certificate private key generated."
 
       - name: Fetch or create distribution certificate
         script: |
@@ -49,14 +51,14 @@ workflows:
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
             --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
             --private-key "$APP_STORE_CONNECT_PRIVATE_KEY" \
-            --certificate-key=@file:$HOME/Library/MobileDevice/Certificates/cert_key \
+            --certificate-key=@file:$HOME/certs/cert_key.pem \
             --save \
           || app-store-connect certificates list \
             --type IOS_DISTRIBUTION \
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
             --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
             --private-key "$APP_STORE_CONNECT_PRIVATE_KEY" \
-            --certificate-key=@file:$HOME/Library/MobileDevice/Certificates/cert_key \
+            --certificate-key=@file:$HOME/certs/cert_key.pem \
             --save
 
       - name: Create App ID and fetch/create provisioning profile
@@ -67,7 +69,7 @@ workflows:
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
             --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
             --private-key "$APP_STORE_CONNECT_PRIVATE_KEY" \
-            --certificate-key=@file:$HOME/Library/MobileDevice/Certificates/cert_key \
+            --certificate-key=@file:$HOME/certs/cert_key.pem \
             --create
 
       - name: Add certificates to keychain and apply profiles
