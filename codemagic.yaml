@@ -4,7 +4,7 @@ workflows:
     max_build_duration: 30
     instance_type: mac_mini_m2
     environment:
-      xcode: 16.2
+      xcode: 26.0
     scripts:
       - name: Install XcodeGen
         script: brew install xcodegen
@@ -26,24 +26,19 @@ workflows:
     environment:
       groups:
         - appstore
-      xcode: 16.2
+      xcode: 26.0
     scripts:
       - name: Install XcodeGen
         script: brew install xcodegen
       - name: Generate Xcode project
         script: xcodegen generate
-
       - name: Initialize keychain
         script: keychain initialize
-
       - name: Generate a certificate private key
         script: |
-          # Distribution certs are built from an RSA key pair. The CLI has no
-          # key-gen subcommand, so make one with openssl (always present).
           mkdir -p $HOME/certs
           openssl genrsa -out $HOME/certs/cert_key.pem 2048
           echo "Certificate private key generated."
-
       - name: Fetch or create distribution certificate
         script: |
           app-store-connect certificates create \
@@ -60,7 +55,6 @@ workflows:
             --private-key "$APP_STORE_CONNECT_PRIVATE_KEY" \
             --certificate-key=@file:$HOME/certs/cert_key.pem \
             --save
-
       - name: Create App ID and fetch/create provisioning profile
         script: |
           app-store-connect fetch-signing-files com.mhr.sonara \
@@ -71,25 +65,20 @@ workflows:
             --private-key "$APP_STORE_CONNECT_PRIVATE_KEY" \
             --certificate-key=@file:$HOME/certs/cert_key.pem \
             --create
-
       - name: Add certificates to keychain and apply profiles
         script: |
           keychain add-certificates
           xcode-project use-profiles
-
       - name: Set unique build number
         script: agvtool new-version -all $(($BUILD_NUMBER + 1)) || true
-
       - name: Build signed IPA
         script: |
           xcode-project build-ipa \
             --project Sonara.xcodeproj \
             --scheme Sonara
-
     artifacts:
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
-
     publishing:
       app_store_connect:
         api_key: $APP_STORE_CONNECT_PRIVATE_KEY

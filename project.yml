@@ -26,12 +26,14 @@ targets:
         PRODUCT_NAME: Sonara
         TARGETED_DEVICE_FAMILY: "1"
         SWIFT_VERSION: "5.9"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
         INFOPLIST_KEY_CFBundleDisplayName: Sonara
     info:
       path: Info.plist
       properties:
         CFBundleDisplayName: Sonara
+        CFBundleIconName: AppIcon
         CFBundleURLTypes:
           - CFBundleURLSchemes: [auth-redirect]
             CFBundleURLName: com.mhr.sonara.auth
