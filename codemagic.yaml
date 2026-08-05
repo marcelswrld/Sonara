@@ -33,15 +33,14 @@ workflows:
       - name: Generate Xcode project
         script: xcodegen generate
 
-      - name: Set up App Store Connect key file
-        script: |
-          # Write the .p8 key from the env var to a file the CLI can read.
-          mkdir -p $HOME/private_keys
-          echo "$APP_STORE_CONNECT_PRIVATE_KEY" > $HOME/private_keys/AuthKey_${APP_STORE_CONNECT_KEY_IDENTIFIER}.p8
-          echo "Key file written for Key ID: $APP_STORE_CONNECT_KEY_IDENTIFIER"
-
       - name: Initialize keychain
         script: keychain initialize
+
+      - name: Generate a certificate private key
+        script: |
+          # A distribution certificate is built from a key pair. Create the
+          # private key first; every signing command below points at it.
+          app-store-connect certificates create-key --save
 
       - name: Fetch or create distribution certificate
         script: |
@@ -50,12 +49,14 @@ workflows:
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
             --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
             --private-key "$APP_STORE_CONNECT_PRIVATE_KEY" \
+            --certificate-key=@file:$HOME/Library/MobileDevice/Certificates/cert_key \
             --save \
           || app-store-connect certificates list \
             --type IOS_DISTRIBUTION \
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
             --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
             --private-key "$APP_STORE_CONNECT_PRIVATE_KEY" \
+            --certificate-key=@file:$HOME/Library/MobileDevice/Certificates/cert_key \
             --save
 
       - name: Create App ID and fetch/create provisioning profile
@@ -66,6 +67,7 @@ workflows:
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
             --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
             --private-key "$APP_STORE_CONNECT_PRIVATE_KEY" \
+            --certificate-key=@file:$HOME/Library/MobileDevice/Certificates/cert_key \
             --create
 
       - name: Add certificates to keychain and apply profiles
