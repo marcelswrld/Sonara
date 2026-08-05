@@ -35,16 +35,25 @@ workflows:
         script: brew install xcodegen
       - name: Generate Xcode project
         script: xcodegen generate
-      - name: Register bundle id & fetch/create signing profile
+      - name: Initialize keychain
+        script: keychain initialize
+      - name: Create distribution certificate (if none exists)
         script: |
-          # Ensure the App ID exists on Apple's side, then fetch or CREATE
-          # the app_store signing profile for it. This is what was missing.
+          # A profile can't exist without a signing certificate. Create or
+          # fetch the distribution cert FIRST, then the profile can attach to it.
+          app-store-connect certificates create \
+            --type IOS_DISTRIBUTION \
+            --save || \
+          app-store-connect certificates list \
+            --type IOS_DISTRIBUTION \
+            --save
+      - name: Create App ID (if needed) and signing profile
+        script: |
           app-store-connect fetch-signing-files com.mhr.sonara \
             --type IOS_APP_STORE \
             --create
-      - name: Add certificate to keychain & apply profiles
+      - name: Add certificates to keychain and apply profiles
         script: |
-          keychain initialize
           keychain add-certificates
           xcode-project use-profiles
       - name: Set unique build number
