@@ -19,6 +19,16 @@ targets:
           - "project.yml"
           - "codemagic.yaml"
           - "README.md"
+          - ".git"
+          - ".git/**"
+          - "**/.git/**"
+          - "*.sample"
+          - "**/*.sample"
+          - ".gitignore"
+          - ".gitattributes"
+          - "*.md"
+          - "*.zip"
+          - "APPLY.md"
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES

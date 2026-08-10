@@ -1,33 +1,29 @@
-# Sonara fixes — round 1 + standalone Spotify
+# Sonara — round 1 fixes + build fix (git-junk in archive)
 
-Replace these 3 files in your Sonara repo, commit, push, run
-"Sonara - TestFlight". Then assign the new build to your TestFlight group.
+Replace these files in your Sonara repo, commit, push, run
+"Sonara - TestFlight".
 
-## What changed
-1. PitchView.swift
-   - Removed the stray green line in the Securitized Value box.
-   - Added keyboard "Done" button + tap-to-dismiss for the revenue field.
-2. SpotifyCore.swift
-   - Now uses SONARA'S OWN Spotify client ID (9f8cd743...), fully
-     standalone — no Musiclips dependency.
-   - Redirect changed to "sonara://callback".
-3. project.yml
-   - Registers the matching "sonara" URL scheme.
+## Files in this package
+- PitchView.swift    — green line removed; keyboard Done button
+- SpotifyCore.swift  — Sonara's OWN client id (standalone); sonara://callback
+- project.yml        — sonara URL scheme + excludes git/sample/doc junk
+- codemagic.yaml     — cleanup step strips .sample/.git/docs before build
 
-## REQUIRED in the Spotify dashboard (you already created the app)
-Confirm the Sonara Spotify app's Redirect URIs include EXACTLY:
+## Why the last build failed
+The build was copying git hook files (update.sample, pre-push.sample, etc.)
+into the app because a .git folder sat inside the source folder XcodeGen
+scans. project.yml now excludes them and codemagic.yaml deletes them before
+generating the project. Fixed two ways for safety.
+
+## Spotify dashboard (required for login)
+Sonara's Spotify app must list redirect URI EXACTLY:
     sonara://callback
-(developer.spotify.com/dashboard -> Sonara -> Settings -> Redirect URIs)
-If it's not there, login bounces back empty. Add it and Save.
+developer.spotify.com/dashboard -> Sonara -> Settings -> Redirect URIs
 
 ## After pushing
-- Codemagic: just run "Sonara - TestFlight" (nothing to configure).
-- App Store Connect: new build appears under TestFlight; assign it to your
-  internal testing group like before. Re-answer export compliance if asked.
+- Codemagic: run "Sonara - TestFlight".
+- App Store Connect: assign new build to your internal test group.
 
-## Possible follow-up (not a blocker to build)
-Sonara's Spotify app is brand new. Spotify limits /recommendations and
-preview_url for apps created after Nov 2024. If Discover loads empty after
-login works, tell me — I'll switch Discover to a supported data source
-(new releases / search / user's top tracks). Login/Profile/Wrapped are
-unaffected.
+## Possible follow-up (not a blocker)
+New Spotify apps have limited /recommendations + previews. If Discover
+loads empty after login works, tell me and I'll switch its data source.

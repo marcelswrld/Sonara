@@ -8,6 +8,13 @@ workflows:
     scripts:
       - name: Install XcodeGen
         script: brew install xcodegen
+      - name: Strip non-source files before generating project
+        script: |
+          # Remove git internals / sample hooks / docs so XcodeGen doesn't
+          # sweep them into the app bundle (they break the archive).
+          find . -name '*.sample' -delete 2>/dev/null || true
+          rm -f *.md *.zip .gitattributes .gitignore 2>/dev/null || true
+          echo "cleanup done"
       - name: Generate Xcode project
         script: xcodegen generate
       - name: Build for iOS Simulator
@@ -30,6 +37,13 @@ workflows:
     scripts:
       - name: Install XcodeGen
         script: brew install xcodegen
+      - name: Strip non-source files before generating project
+        script: |
+          # Remove git internals / sample hooks / docs so XcodeGen doesn't
+          # sweep them into the app bundle (they break the archive).
+          find . -name '*.sample' -delete 2>/dev/null || true
+          rm -f *.md *.zip .gitattributes .gitignore 2>/dev/null || true
+          echo "cleanup done"
       - name: Generate Xcode project
         script: xcodegen generate
       - name: Initialize keychain
