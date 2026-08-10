@@ -41,6 +41,8 @@ struct PitchView: View {
         return ProjectionEngine.project(baseRevenue: base, assumptions: a)
     }
 
+    @FocusState private var revenueFocused: Bool
+
     var body: some View {
         ZStack {
             Theme.Palette.ink.ignoresSafeArea()
@@ -59,6 +61,17 @@ struct PitchView: View {
                 }
                 .padding(Theme.Space.l)
             }
+            // Tap anywhere outside the field to dismiss the keypad.
+            .scrollDismissesKeyboard(.interactively)
+            .contentShape(Rectangle())
+            .onTapGesture { revenueFocused = false }
+        }
+        .toolbar {
+            // The decimal keypad has no return key; give it a Done button.
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { revenueFocused = false }
+            }
         }
     }
 
@@ -76,6 +89,7 @@ struct PitchView: View {
                     .foregroundStyle(Theme.Palette.mist)
                 TextField("0", text: $revenueInput)
                     .keyboardType(.decimalPad)
+                    .focused($revenueFocused)
                     .font(Theme.Type_.money(28))
                     .foregroundStyle(Theme.Palette.chalk)
             }
@@ -133,19 +147,11 @@ struct PitchView: View {
                 .tracking(1.2)
                 .foregroundStyle(Theme.Palette.mist)
 
-            ZStack(alignment: .leading) {
-                // Signature: the decay curve behind the number.
-                DecayCurve(values: result.years.map(\.nominal))
-                    .stroke(Theme.Palette.mint.opacity(0.35),
-                            style: StrokeStyle(lineWidth: 2, lineCap: .round))
-                    .frame(height: 64)
-
-                Text(ProjectionEngine.shortMoney(result.presentValueTotal))
-                    .font(Theme.Type_.money(44))
-                    .foregroundStyle(Theme.brassGlow)
-                    .contentTransition(.numericText())
-                    .animation(.snappy, value: result.presentValueTotal)
-            }
+            Text(ProjectionEngine.shortMoney(result.presentValueTotal))
+                .font(Theme.Type_.money(44))
+                .foregroundStyle(Theme.brassGlow)
+                .contentTransition(.numericText())
+                .animation(.snappy, value: result.presentValueTotal)
 
             HStack(spacing: Theme.Space.m) {
                 StatPair(label: "Revenue path total",

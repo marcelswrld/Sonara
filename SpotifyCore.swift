@@ -5,13 +5,17 @@ import CryptoKit
 import Security
 
 // =====================================================================
-// SpotifyCore — auth ported from Musiclips, upgraded to PKCE.
+// SpotifyCore — PKCE auth for Sonara (standalone).
 //
-// WHY THE SAME CLIENT ID: this reuses Musiclips' existing Spotify app
-// registration (created 2023). Spotify restricted several endpoints
-// (recommendations, preview URLs, etc.) for apps created after late
-// 2024 — reusing the existing registration preserves access, and the
-// redirect URI below is already whitelisted in its dashboard.
+// STANDALONE SPOTIFY APP: uses Sonara's own Spotify registration
+// (client ID below), NOT Musiclips'. Redirect URI "sonara://callback"
+// must be whitelisted in Sonara's Spotify dashboard.
+//
+// HEADS-UP ON NEW-APP ENDPOINT LIMITS: Spotify restricted some endpoints
+// (notably /recommendations and 30s preview_url) for apps created after
+// Nov 2024. Sonara's app is new, so if recommendations or previews come
+// back empty in testing, that's why — we'll switch Discover to a
+// supported source (e.g. new releases / search / user top tracks).
 //
 // WHY NO CLIENT SECRET: the old app embedded the secret in the binary
 // (Constants.swift) — anyone can extract it. PKCE removes the need for
@@ -21,9 +25,14 @@ import Security
 // =====================================================================
 
 enum SpotifyConfig {
-    static let clientID = "a03d4f89d838429caf514b94f45ae533" // existing Musiclips app
-    static let redirectURI = "auth-redirect://"               // already whitelisted
-    static let callbackScheme = "auth-redirect"
+    static let clientID = "9f8cd743c2354f5d804637d69f65d370" // Sonara's own Spotify app (standalone)
+    // NOTE: this exact string must be registered in the Spotify Developer
+    // Dashboard → this app → Settings → Redirect URIs. A bare "scheme://"
+    // is often rejected by Spotify and by ASWebAuthenticationSession, so we
+    // use a path component. Whatever value is used here MUST match the
+    // dashboard entry character-for-character.
+    static let redirectURI = "sonara://callback"
+    static let callbackScheme = "sonara"
     static let authBase = "https://accounts.spotify.com"
     static let apiBase = "https://api.spotify.com/v1"
     static let scopes = [
