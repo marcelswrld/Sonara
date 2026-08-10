@@ -1,22 +1,39 @@
-# Sonara — Discover fix (new-Spotify-app endpoint limits)
+# Sonara — Discover fix + certificate-limit fix
 
-Login works now. Discover was empty because Spotify DISABLED the
-/recommendations endpoint for apps created after Nov 2024 (Sonara's app
-is new). Fixed by switching Discover to endpoints that still work.
+## Two things in this package:
 
-## Replace these 2 files, commit, push, run "Sonara - TestFlight":
-- SpotifyAPI.swift   — Discover now layers: your top tracks -> new releases
-                       -> saved tracks -> search. First non-empty wins.
-- DiscoverView.swift — real "Retry" button (the old "pull to retry" had no
-                       pull gesture); clearer empty/error messages.
+### A) Discover data fix (login already works!)
+Replace these, they fix the empty Discover:
+- SpotifyAPI.swift   — Discover now uses your top tracks / new releases /
+                       saved / search instead of the disabled /recommendations
+- DiscoverView.swift — working Retry button, clearer messages
 
-## Expected after this build
-- Discover fills with tracks (from your top tracks / new releases / search).
-- Swiping right saves them, which then makes Wrapped count > 0.
-- If it's STILL empty, tap Retry and tell me what happens — we may need to
-  add scopes or use a different mix.
+### B) The build failed on a CERTIFICATE LIMIT
+"You already have a current Distribution certificate" + "Found 5
+certificates" = Apple's account hit its distribution-cert cap. Every past
+build made a new throwaway cert and they piled up.
 
-## Note on album art / previews
-Some new-release tracks may lack artwork or 30s previews (Spotify limits
-previews for new apps too). Core swipe/save still works. If previews are
-important, tell me and we'll adjust.
+TWO WAYS TO FIX — pick one:
+
+**Option 1 (safest — do this first, 2 min, no code):**
+Manually delete old certs in Apple's portal:
+  developer.apple.com/account -> Certificates -> filter "Distribution"
+  -> you'll see several "iOS Distribution" / "Apple Distribution" certs.
+  Delete the OLDER ones, keep 1 (or delete all if none are used by other
+  apps). Then re-run the CURRENT build (no code change needed) — but it
+  will still try to make a new one, which now succeeds because there's room.
+  IMPORTANT: if Mark's OTHER apps (MyPitch/Musiclips) use a cert, don't
+  delete that one. When unsure, delete the ones created most recently by
+  these Sonara build attempts.
+
+**Option 2 (automated — use the codemagic.yaml in this zip):**
+It auto-deletes distribution certs before creating a fresh one. Convenient,
+BUT it deletes ALL distribution certs on the account — only use this if
+you're sure no other app depends on them. Since this is Mark's account with
+other apps, OPTION 1 IS SAFER.
+
+## Recommended path
+1. Push SpotifyAPI.swift + DiscoverView.swift (the Discover fix).
+2. Do Option 1 manually (delete surplus certs in Apple portal).
+3. Re-run "Sonara - TestFlight" with your EXISTING codemagic.yaml.
+Only fall back to Option 2's codemagic.yaml if Option 1 is unclear.

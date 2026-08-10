@@ -53,16 +53,31 @@ workflows:
           mkdir -p $HOME/certs
           openssl genrsa -out $HOME/certs/cert_key.pem 2048
           echo "Certificate private key generated."
-      - name: Fetch or create distribution certificate
+      - name: Clear surplus distribution certificates (Apple limit is ~3)
         script: |
-          app-store-connect certificates create \
+          # Past builds each made a new cert; we hit Apple's cap.
+          # Delete existing distribution certs so we can create one fresh
+          # cert matching this build's key. Old certs are unusable here.
+          app-store-connect certificates list \
             --type IOS_DISTRIBUTION \
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
             --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
             --private-key "$APP_STORE_CONNECT_PRIVATE_KEY" \
-            --certificate-key=@file:$HOME/certs/cert_key.pem \
-            --save \
-          || app-store-connect certificates list \
+            --json > /tmp/certs.json 2>/dev/null || echo "[]" > /tmp/certs.json
+          python3 -c "import json; [print(c['id']) for c in json.load(open('/tmp/certs.json'))]" > /tmp/cert_ids.txt 2>/dev/null || true
+          while read CERT_ID; do
+            [ -z "$CERT_ID" ] && continue
+            echo "Deleting old certificate $CERT_ID"
+            app-store-connect certificates delete "$CERT_ID" \
+              --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
+              --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
+              --private-key "$APP_STORE_CONNECT_PRIVATE_KEY" \
+              --yes || true
+          done < /tmp/cert_ids.txt
+          echo "Surplus certificate cleanup done."
+      - name: Create fresh distribution certificate
+        script: |
+          app-store-connect certificates create \
             --type IOS_DISTRIBUTION \
             --issuer-id "$APP_STORE_CONNECT_ISSUER_ID" \
             --key-id "$APP_STORE_CONNECT_KEY_IDENTIFIER" \
