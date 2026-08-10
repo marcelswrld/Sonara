@@ -1,29 +1,24 @@
-# Sonara — round 1 fixes + build fix (git-junk in archive)
+# Sonara — fixes + restore missing file
 
-Replace these files in your Sonara repo, commit, push, run
-"Sonara - TestFlight".
+## FIRST: the last build failed because ProfileView.swift is MISSING
+from your GitHub repo (it exists in the code but never got pushed —
+lost in one of the zip shuffles). Add ProfileView.swift to the repo.
 
-## Files in this package
-- PitchView.swift    — green line removed; keyboard Done button
-- SpotifyCore.swift  — Sonara's OWN client id (standalone); sonara://callback
-- project.yml        — sonara URL scheme + excludes git/sample/doc junk
-- codemagic.yaml     — cleanup step strips .sample/.git/docs before build
+## Replace/add ALL of these in your Sonara repo, then commit + push:
+- ProfileView.swift   — ADD THIS (it's missing from the repo; that's what broke the build)
+- PitchView.swift     — green line removed; keyboard Done button
+- SpotifyCore.swift   — Sonara's own client id (standalone); sonara://callback
+- project.yml         — sonara URL scheme + excludes git/sample/doc junk
+- codemagic.yaml      — cleanup step before build
 
-## Why the last build failed
-The build was copying git hook files (update.sample, pre-push.sample, etc.)
-into the app because a .git folder sat inside the source folder XcodeGen
-scans. project.yml now excludes them and codemagic.yaml deletes them before
-generating the project. Fixed two ways for safety.
+## HOW TO CONFIRM nothing else is missing
+On GitHub, open your Sonara repo and check these 15 files are ALL there:
+App, CatalogPanel, CatalogValuationEngine, DiscoverView, DiscoveryStore,
+LaunchView, PitchView, ProfileView, ProjectionEngine, ProjectionEngineTests,
+SpotifyAPI, SpotifyCore, StreakEngine, Theme, WrappedView
+If any others are missing, tell me and I'll send them.
 
-## Spotify dashboard (required for login)
-Sonara's Spotify app must list redirect URI EXACTLY:
+## Spotify dashboard (for login): redirect URI must include exactly
     sonara://callback
-developer.spotify.com/dashboard -> Sonara -> Settings -> Redirect URIs
 
-## After pushing
-- Codemagic: run "Sonara - TestFlight".
-- App Store Connect: assign new build to your internal test group.
-
-## Possible follow-up (not a blocker)
-New Spotify apps have limited /recommendations + previews. If Discover
-loads empty after login works, tell me and I'll switch its data source.
+## After pushing: run "Sonara - TestFlight", assign build to your test group.
