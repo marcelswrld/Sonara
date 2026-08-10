@@ -38,8 +38,16 @@ struct DiscoverView: View {
 
     private func load() async {
         loading = true; errorText = nil
-        do { deck = try await api.recommendations(limit: 20) }
-        catch { errorText = "Couldn't load tracks. Pull to retry." }
+        do {
+            let tracks = try await api.recommendations(limit: 20)
+            if tracks.isEmpty {
+                errorText = "No tracks available right now. Tap Retry."
+            } else {
+                deck = tracks
+            }
+        } catch {
+            errorText = "Couldn't load tracks. Tap Retry."
+        }
         loading = false
     }
 
@@ -59,8 +67,19 @@ struct DiscoverView: View {
 
     @ViewBuilder private var realDeck: some View {
         if let errorText {
-            Text(errorText).font(Theme.Type_.body(14))
-                .foregroundStyle(Theme.Palette.mist)
+            VStack(spacing: Theme.Space.m) {
+                Text(errorText).font(Theme.Type_.body(14))
+                    .foregroundStyle(Theme.Palette.mist)
+                    .multilineTextAlignment(.center)
+                Button { Task { await load() } } label: {
+                    Text("Retry")
+                        .font(Theme.Type_.body(15, weight: .semibold))
+                        .padding(.vertical, 10).padding(.horizontal, 24)
+                        .background(Theme.Palette.mint, in: Capsule())
+                        .foregroundStyle(Theme.Palette.ink)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else if deck.isEmpty && !loading {
             emptyState
         } else {

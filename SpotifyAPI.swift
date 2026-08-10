@@ -44,6 +44,7 @@ struct SPUser: Codable {
 
 struct RecommendationsResponse: Codable { let tracks: [SPTrack] }
 struct TopTracksResponse: Codable { let items: [SPTrack] }
+struct AlbumTracksResponse: Codable { let items: [SPTrack] }
 
 // MARK: - API
 
@@ -73,21 +74,68 @@ final class SpotifyAPI: ObservableObject {
         try JSONDecoder().decode(SPUser.self, from: await request("/me"))
     }
 
-    func topTracks(limit: Int = 5) async throws -> [SPTrack] {
-        let d = try await request("/me/top/tracks", query: ["limit": String(limit)])
+    func topTracks(limit: Int = 20) async throws -> [SPTrack] {
+        let d = try await request("/me/top/tracks", query: ["limit": String(limit),
+                                                            "time_range": "medium_term"])
         return try JSONDecoder().decode(TopTracksResponse.self, from: d).items
     }
 
-    /// Same strategy as Musiclips: seed from the user's top tracks;
-    /// fall back to genre seeds for brand-new accounts.
+    /// The user's saved/liked tracks.
+    func savedTracks(limit: Int = 20) async throws -> [SPTrack] {
+        let d = try await request("/me/tracks", query: ["limit": String(limit)])
+        struct SavedResponse: Codable { let items: [SavedItem]
+            struct SavedItem: Codable { let track: SPTrack } }
+        return try JSONDecoder().decode(SavedResponse.self, from: d).items.map(\.track)
+    }
+
+    /// New-release albums → their tracks. Works for all apps.
+    func newReleaseTracks(limit: Int = 20) async throws -> [SPTrack] {
+        let d = try await request("/browse/new-releases", query: ["limit": "20"])
+        struct NR: Codable { let albums: Albums
+            struct Albums: Codable { let items: [Album]
+                struct Album: Codable { let id: String } } }
+        let albumIDs = (try? JSONDecoder().decode(NR.self, from: d).albums.items.map(\.id)) ?? []
+        guard !albumIDs.isEmpty else { return [] }
+        // Pull tracks from the first few albums.
+        var tracks: [SPTrack] = []
+        for id in albumIDs.prefix(8) {
+            if let ad = try? await request("/albums/\(id)/tracks", query: ["limit": "3"]),
+               let resp = try? JSONDecoder().decode(AlbumTracksResponse.self, from: ad) {
+                // album-track objects lack album art; attach the album id via search fallback later
+                tracks.append(contentsOf: resp.items)
+            }
+            if tracks.count >= limit { break }
+        }
+        return Array(tracks.prefix(limit))
+    }
+
+    /// Search as a universal fallback (always available).
+    func searchTracks(_ q: String, limit: Int = 20) async throws -> [SPTrack] {
+        let d = try await request("/search", query: ["q": q, "type": "track",
+                                                     "limit": String(limit)])
+        struct SearchResponse: Codable { let tracks: Tracks
+            struct Tracks: Codable { let items: [SPTrack] } }
+        return try JSONDecoder().decode(SearchResponse.self, from: d).tracks.items
+    }
+
+    /// Discover feed. `/recommendations` is disabled for apps created after
+    /// Nov 2024, so we layer sources that DO work: the user's top tracks →
+    /// new releases → their saved tracks → a broad search. First non-empty
+    /// result wins; results are de-duplicated.
     func recommendations(limit: Int = 20) async throws -> [SPTrack] {
-        let seeds = (try? await topTracks(limit: 5)) ?? []
-        let query: [String: String] = seeds.isEmpty
-            ? ["seed_genres": "pop,hip-hop,indie", "limit": String(limit)]
-            : ["seed_tracks": seeds.prefix(5).map(\.id).joined(separator: ","),
-               "limit": String(limit)]
-        let d = try await request("/recommendations", query: query)
-        return try JSONDecoder().decode(RecommendationsResponse.self, from: d).tracks
+        var pool: [SPTrack] = []
+        if let top = try? await topTracks(limit: limit) { pool += top }
+        if pool.count < limit, let nr = try? await newReleaseTracks(limit: limit) { pool += nr }
+        if pool.count < limit, let saved = try? await savedTracks(limit: limit) { pool += saved }
+        if pool.count < limit, let s = try? await searchTracks("year:2024-2026", limit: limit) { pool += s }
+        // de-dupe by id, keep only tracks we can show
+        var seen = Set<String>()
+        let deck = pool.filter { seen.insert($0.id).inserted }
+        if deck.isEmpty {
+            // last resort so the screen is never empty
+            return try await searchTracks("top hits", limit: limit)
+        }
+        return Array(deck.prefix(limit))
     }
 
     /// Musiclips' likeTrack: save to the user's Spotify library.

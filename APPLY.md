@@ -1,24 +1,22 @@
-# Sonara — fixes + restore missing file
+# Sonara — Discover fix (new-Spotify-app endpoint limits)
 
-## FIRST: the last build failed because ProfileView.swift is MISSING
-from your GitHub repo (it exists in the code but never got pushed —
-lost in one of the zip shuffles). Add ProfileView.swift to the repo.
+Login works now. Discover was empty because Spotify DISABLED the
+/recommendations endpoint for apps created after Nov 2024 (Sonara's app
+is new). Fixed by switching Discover to endpoints that still work.
 
-## Replace/add ALL of these in your Sonara repo, then commit + push:
-- ProfileView.swift   — ADD THIS (it's missing from the repo; that's what broke the build)
-- PitchView.swift     — green line removed; keyboard Done button
-- SpotifyCore.swift   — Sonara's own client id (standalone); sonara://callback
-- project.yml         — sonara URL scheme + excludes git/sample/doc junk
-- codemagic.yaml      — cleanup step before build
+## Replace these 2 files, commit, push, run "Sonara - TestFlight":
+- SpotifyAPI.swift   — Discover now layers: your top tracks -> new releases
+                       -> saved tracks -> search. First non-empty wins.
+- DiscoverView.swift — real "Retry" button (the old "pull to retry" had no
+                       pull gesture); clearer empty/error messages.
 
-## HOW TO CONFIRM nothing else is missing
-On GitHub, open your Sonara repo and check these 15 files are ALL there:
-App, CatalogPanel, CatalogValuationEngine, DiscoverView, DiscoveryStore,
-LaunchView, PitchView, ProfileView, ProjectionEngine, ProjectionEngineTests,
-SpotifyAPI, SpotifyCore, StreakEngine, Theme, WrappedView
-If any others are missing, tell me and I'll send them.
+## Expected after this build
+- Discover fills with tracks (from your top tracks / new releases / search).
+- Swiping right saves them, which then makes Wrapped count > 0.
+- If it's STILL empty, tap Retry and tell me what happens — we may need to
+  add scopes or use a different mix.
 
-## Spotify dashboard (for login): redirect URI must include exactly
-    sonara://callback
-
-## After pushing: run "Sonara - TestFlight", assign build to your test group.
+## Note on album art / previews
+Some new-release tracks may lack artwork or 30s previews (Spotify limits
+previews for new apps too). Core swipe/save still works. If previews are
+important, tell me and we'll adjust.
