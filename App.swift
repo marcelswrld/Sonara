@@ -6,6 +6,7 @@ struct SonaraApp: App {
     @StateObject private var api: SpotifyAPI
     @StateObject private var store = DiscoveryStore()
     @StateObject private var player = PreviewPlayer()
+    @StateObject private var taste = TasteEngine()
 
     init() {
         let a = SpotifyAuth()
@@ -20,6 +21,7 @@ struct SonaraApp: App {
                 .environmentObject(api)
                 .environmentObject(store)
                 .environmentObject(player)
+                .environmentObject(taste)
         }
     }
 }
@@ -35,6 +37,7 @@ struct RootTabView: View {
     var body: some View {
         TabView {
             DiscoverView().tabItem { Label("Discover", systemImage: "waveform") }
+            TasteMapView().tabItem { Label("Taste", systemImage: "square.grid.3x3.fill") }
             PitchView().tabItem { Label("Pitch", systemImage: "chart.line.uptrend.xyaxis") }
             WrappedView().tabItem { Label("Wrapped", systemImage: "sparkles") }
             ProfileView().tabItem { Label("Profile", systemImage: "person.crop.circle") }

@@ -142,6 +142,42 @@ final class SpotifyAPI: ObservableObject {
     func saveToLibrary(trackID: String) async throws {
         _ = try await request("/me/tracks", method: "PUT", query: ["ids": trackID])
     }
+
+    /// Follow an artist on Spotify (used when saving artist-centric cards).
+    func followArtist(artistID: String) async throws {
+        _ = try? await request("/me/following", method: "PUT",
+                                query: ["type": "artist", "ids": artistID])
+    }
+
+    /// Audio features for a track — feeds the DNA spectrum. May be
+    /// restricted for new apps; returns nil gracefully if so.
+    func audioFeatures(trackID: String) async -> AudioFeatures? {
+        guard let d = try? await request("/audio-features/\(trackID)") else { return nil }
+        struct AF: Codable {
+            let energy: Double?; let danceability: Double?; let valence: Double?
+            let acousticness: Double?; let instrumentalness: Double?; let tempo: Double?
+        }
+        guard let af = try? JSONDecoder().decode(AF.self, from: d) else { return nil }
+        return AudioFeatures(energy: af.energy ?? 0, danceability: af.danceability ?? 0,
+                             valence: af.valence ?? 0, acousticness: af.acousticness ?? 0,
+                             instrumentalness: af.instrumentalness ?? 0, tempo: af.tempo ?? 0)
+    }
+
+    /// Full artist objects (for genres, which track objects don't include).
+    func artistDetails(ids: [String]) async -> [SPArtist] {
+        guard !ids.isEmpty else { return [] }
+        let joined = ids.prefix(50).joined(separator: ",")
+        guard let d = try? await request("/artists", query: ["ids": joined]) else { return [] }
+        struct AR: Codable { let artists: [SPArtist] }
+        return (try? JSONDecoder().decode(AR.self, from: d).artists) ?? []
+    }
+
+    /// Genres for a single track's primary artist (for taste seeds).
+    func genresForTrack(_ track: SPTrack) async -> [String] {
+        guard let artistID = track.artists?.first?.id else { return [] }
+        let details = await artistDetails(ids: [artistID])
+        return details.first?.genres ?? []
+    }
 }
 
 // MARK: - Preview player (Musiclips' 30-second "strip")

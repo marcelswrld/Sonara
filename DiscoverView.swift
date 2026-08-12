@@ -9,11 +9,13 @@ struct DiscoverView: View {
     @EnvironmentObject var api: SpotifyAPI
     @EnvironmentObject var store: DiscoveryStore
     @EnvironmentObject var player: PreviewPlayer
+    @EnvironmentObject var taste: TasteEngine
 
     @State private var deck: [SPTrack] = []
     @State private var loading = false
     @State private var errorText: String?
     @State private var dragOffset: CGSize = .zero
+    @State private var loadedIDs = Set<String>()   // avoid repeats across top-ups
 
     var body: some View {
         ZStack {
@@ -30,23 +32,27 @@ struct DiscoverView: View {
                 .padding(.horizontal, Theme.Space.l)
                 controls
             }
-            .padding(.vertical, Theme.Space.m)
+            .padding(.top, Theme.Space.s)
+            .padding(.bottom, Theme.Space.m)
         }
-        .task(id: auth.isSignedIn) { if auth.isSignedIn { await load() } }
+        .task(id: auth.isSignedIn) { if auth.isSignedIn { await load(reset: true) } }
         .onDisappear { player.stop() }
     }
 
-    private func load() async {
-        loading = true; errorText = nil
+    private func load(reset: Bool = false) async {
+        loading = true; if reset { errorText = nil; loadedIDs.removeAll() }
         do {
-            let tracks = try await api.recommendations(limit: 20)
-            if tracks.isEmpty {
+            // Pull a WIDE, varied pool so it doesn't loop the same 15.
+            var pool = try await api.recommendations(limit: 50)
+            // filter out anything already shown/seen this session
+            pool = pool.filter { loadedIDs.insert($0.id).inserted }
+            if pool.isEmpty && deck.isEmpty {
                 errorText = "No tracks available right now. Tap Retry."
             } else {
-                deck = tracks
+                deck.append(contentsOf: pool)
             }
         } catch {
-            errorText = "Couldn't load tracks. Tap Retry."
+            if deck.isEmpty { errorText = "Couldn't load tracks. Tap Retry." }
         }
         loading = false
     }
@@ -115,22 +121,43 @@ struct DiscoverView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
             if liked {
                 store.registerLike(top)
-                Task { try? await api.saveToLibrary(trackID: top.id) }
+                // Save to Spotify + follow the artist, and feed the Taste Map
+                // with real genres + audio-feature DNA.
+                Task {
+                    try? await api.saveToLibrary(trackID: top.id)
+                    if let artistID = top.artists?.first?.id {
+                        try? await api.followArtist(artistID: artistID)
+                    }
+                    let genres = await api.genresForTrack(top)
+                    let feats = await api.audioFeatures(trackID: top.id)
+                    let seed = TasteSeed(id: top.id,
+                                         name: top.name ?? "Unknown",
+                                         artist: top.artistLine,
+                                         genres: genres,
+                                         artworkURL: top.artworkURL?.absoluteString,
+                                         features: feats,
+                                         savedAt: Date())
+                    await MainActor.run { taste.add(seed) }
+                }
             }
             player.stop()
             if !deck.isEmpty { deck.removeFirst() }
             dragOffset = .zero
-            if deck.count < 5 { Task { await load() } } // top-up like Musiclips
+            if deck.count < 8 { Task { await load() } } // keep the feed flowing
         }
     }
+
+    private var currentHasPreview: Bool { deck.first?.preview_url != nil }
 
     private var controls: some View {
         HStack(spacing: Theme.Space.xl) {
             RoundControl(symbol: "xmark", tint: Theme.Palette.mist) { decide(liked: false) }
             RoundControl(symbol: player.playingTrackID == nil ? "play.fill" : "pause.fill",
-                         tint: Theme.Palette.chalk, big: true) {
-                if let top = deck.first { player.toggle(top) }
+                         tint: currentHasPreview ? Theme.Palette.chalk : Theme.Palette.mist.opacity(0.4),
+                         big: true) {
+                if let top = deck.first, top.preview_url != nil { player.toggle(top) }
             }
+            .disabled(!currentHasPreview)
             RoundControl(symbol: "heart.fill", tint: Theme.Palette.mint) { decide(liked: true) }
         }
         .opacity(auth.isSignedIn && !deck.isEmpty ? 1 : 0.3)
