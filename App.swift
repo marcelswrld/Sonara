@@ -6,7 +6,6 @@ struct SonaraApp: App {
     @StateObject private var api: SpotifyAPI
     @StateObject private var store = DiscoveryStore()
     @StateObject private var player = PreviewPlayer()
-    @StateObject private var taste = TasteEngine()
 
     init() {
         let a = SpotifyAuth()
@@ -21,26 +20,36 @@ struct SonaraApp: App {
                 .environmentObject(api)
                 .environmentObject(store)
                 .environmentObject(player)
-                .environmentObject(taste)
         }
     }
 }
 
 struct RootTabView: View {
+    @State private var selectedTab = 0
+    @State private var routeToPitchArtist: String?
+
     init() {
         let appearance = UITabBarAppearance()
         appearance.configureWithOpaqueBackground()
-        appearance.backgroundColor = UIColor(red: 0.03, green: 0.05, blue: 0.07, alpha: 1)
+        appearance.backgroundColor = UIColor(red: 0.027, green: 0.047, blue: 0.075, alpha: 1)
         UITabBar.appearance().standardAppearance = appearance
         UITabBar.appearance().scrollEdgeAppearance = appearance
     }
+
     var body: some View {
-        TabView {
-            DiscoverView().tabItem { Label("Discover", systemImage: "waveform") }
-            TasteMapView().tabItem { Label("Taste", systemImage: "square.grid.3x3.fill") }
-            PitchView().tabItem { Label("Pitch", systemImage: "chart.line.uptrend.xyaxis") }
-            WrappedView().tabItem { Label("Wrapped", systemImage: "sparkles") }
-            ProfileView().tabItem { Label("Profile", systemImage: "person.crop.circle") }
+        TabView(selection: $selectedTab) {
+            TrendsView(routeToPitchArtist: $routeToPitchArtist, selectedTab: $selectedTab)
+                .tabItem { Label("Trends", systemImage: "chart.line.uptrend.xyaxis") }
+                .tag(0)
+            PitchView(incomingArtist: $routeToPitchArtist)
+                .tabItem { Label("Pitch", systemImage: "dollarsign.circle") }
+                .tag(1)
+            WrappedView()
+                .tabItem { Label("Wrapped", systemImage: "sparkles") }
+                .tag(2)
+            ProfileView()
+                .tabItem { Label("Profile", systemImage: "person.crop.circle") }
+                .tag(3)
         }
         .tint(Theme.Palette.mint)
         .preferredColorScheme(.dark)

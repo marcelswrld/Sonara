@@ -8,6 +8,7 @@ import Charts
 // =====================================================================
 
 struct PitchView: View {
+    @Binding var incomingArtist: String?
     @State private var revenueInput: String = "50000"
     @State private var scenario: Scenario = .base
     @State private var sixYears = false
@@ -43,6 +44,25 @@ struct PitchView: View {
 
     @FocusState private var revenueFocused: Bool
 
+    private var routedBanner: some View {
+        HStack(spacing: Theme.Space.s) {
+            Image(systemName: "sparkles").foregroundStyle(Theme.Palette.mint)
+            Text("Valuing a rising artist from Trends. Enter their last-12-months streaming revenue to project a catalog value.")
+                .font(Theme.Type_.caption()).foregroundStyle(Theme.Palette.mist)
+            Spacer(minLength: 0)
+            Button {
+                withAnimation { incomingArtist = nil }
+            } label: {
+                Image(systemName: "xmark.circle.fill").foregroundStyle(Theme.Palette.mist)
+            }
+        }
+        .padding(Theme.Space.m)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .fill(Theme.Palette.mint.opacity(0.10))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Theme.Palette.mint.opacity(0.3), lineWidth: 1)))
+    }
+
     var body: some View {
         ZStack {
             Theme.Palette.ink.ignoresSafeArea()
@@ -52,6 +72,9 @@ struct PitchView: View {
                         .font(Theme.Type_.display(30))
                         .foregroundStyle(Theme.Palette.chalk)
 
+                    if incomingArtist != nil {
+                        routedBanner
+                    }
                     inputCard
                     scenarioPicker
                     valuationCard

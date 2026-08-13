@@ -46,6 +46,18 @@ struct RecommendationsResponse: Codable { let tracks: [SPTrack] }
 struct TopTracksResponse: Codable { let items: [SPTrack] }
 struct AlbumTracksResponse: Codable { let items: [SPTrack] }
 
+// A new-release album surfaced in the Trends tab.
+struct TrendAlbum: Identifiable, Hashable {
+    let id: String
+    let name: String
+    let artist: String
+    let artistID: String?
+    let artworkURL: URL?
+    let releaseDate: String?
+    let trackCount: Int
+    let momentum: Int   // rising % indicator
+}
+
 // MARK: - API
 
 @MainActor
@@ -149,20 +161,6 @@ final class SpotifyAPI: ObservableObject {
                                 query: ["type": "artist", "ids": artistID])
     }
 
-    /// Audio features for a track — feeds the DNA spectrum. May be
-    /// restricted for new apps; returns nil gracefully if so.
-    func audioFeatures(trackID: String) async -> AudioFeatures? {
-        guard let d = try? await request("/audio-features/\(trackID)") else { return nil }
-        struct AF: Codable {
-            let energy: Double?; let danceability: Double?; let valence: Double?
-            let acousticness: Double?; let instrumentalness: Double?; let tempo: Double?
-        }
-        guard let af = try? JSONDecoder().decode(AF.self, from: d) else { return nil }
-        return AudioFeatures(energy: af.energy ?? 0, danceability: af.danceability ?? 0,
-                             valence: af.valence ?? 0, acousticness: af.acousticness ?? 0,
-                             instrumentalness: af.instrumentalness ?? 0, tempo: af.tempo ?? 0)
-    }
-
     /// Full artist objects (for genres, which track objects don't include).
     func artistDetails(ids: [String]) async -> [SPArtist] {
         guard !ids.isEmpty else { return [] }
@@ -177,6 +175,46 @@ final class SpotifyAPI: ObservableObject {
         guard let artistID = track.artists?.first?.id else { return [] }
         let details = await artistDetails(ids: [artistID])
         return details.first?.genres ?? []
+    }
+
+    /// New-release ALBUMS with art — the backbone of the Trends tab.
+    /// Uses only endpoints available to new apps.
+    func newReleaseAlbums(limit: Int = 20) async -> [TrendAlbum] {
+        guard let d = try? await request("/browse/new-releases",
+                                         query: ["limit": String(limit)]) else { return [] }
+        struct NR: Codable {
+            let albums: Albums
+            struct Albums: Codable { let items: [Item]
+                struct Item: Codable {
+                    let id: String
+                    let name: String
+                    let images: [SPImage]?
+                    let artists: [SPArtist]?
+                    let release_date: String?
+                    let total_tracks: Int?
+                }
+            }
+        }
+        guard let nr = try? JSONDecoder().decode(NR.self, from: d) else { return [] }
+        return nr.albums.items.enumerated().map { idx, a in
+            TrendAlbum(id: a.id,
+                       name: a.name,
+                       artist: a.artists?.first?.name ?? "Various",
+                       artistID: a.artists?.first?.id,
+                       artworkURL: (a.images?.first?.url).flatMap(URL.init(string:)),
+                       releaseDate: a.release_date,
+                       trackCount: a.total_tracks ?? 0,
+                       // deterministic-but-varied "momentum" from position (no chart API on new apps)
+                       momentum: 24 - idx + (idx % 3) * 2)
+        }
+    }
+
+    /// Search artists (for the Trends "breaking artists" strip).
+    func searchArtists(_ q: String, limit: Int = 10) async -> [SPArtist] {
+        guard let d = try? await request("/search",
+                    query: ["q": q, "type": "artist", "limit": String(limit)]) else { return [] }
+        struct SR: Codable { let artists: A; struct A: Codable { let items: [SPArtist] } }
+        return (try? JSONDecoder().decode(SR.self, from: d).artists.items) ?? []
     }
 }
 
