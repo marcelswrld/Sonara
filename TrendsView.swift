@@ -192,7 +192,7 @@ struct TrendsView: View {
 
     private func route(to artistID: String?) {
         routeToPitchArtist = artistID
-        withAnimation { selectedTab = 1 } // jump to Pitch
+        withAnimation { selectedTab = 2 } // jump to Pitch
     }
 }
 

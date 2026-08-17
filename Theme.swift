@@ -71,4 +71,17 @@ extension Color {
             blue:  Double(hex & 0xFF) / 255
         )
     }
+
+    /// Linear blend between two colors (0 = self, 1 = other).
+    func blend(to other: Color, fraction: Double) -> Color {
+        let f = Swift.min(Swift.max(fraction, 0), 1)
+        let a = UIColor(self), b = UIColor(other)
+        var r1: CGFloat = 0, g1: CGFloat = 0, bl1: CGFloat = 0, al1: CGFloat = 0
+        var r2: CGFloat = 0, g2: CGFloat = 0, bl2: CGFloat = 0, al2: CGFloat = 0
+        a.getRed(&r1, green: &g1, blue: &bl1, alpha: &al1)
+        b.getRed(&r2, green: &g2, blue: &bl2, alpha: &al2)
+        return Color(red: Double(r1 + (r2 - r1) * f),
+                     green: Double(g1 + (g2 - g1) * f),
+                     blue: Double(bl1 + (bl2 - bl1) * f))
+    }
 }

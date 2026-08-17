@@ -6,11 +6,14 @@ struct SonaraApp: App {
     @StateObject private var api: SpotifyAPI
     @StateObject private var store = DiscoveryStore()
     @StateObject private var player = PreviewPlayer()
+    @StateObject private var mood: MoodEngine
 
     init() {
         let a = SpotifyAuth()
+        let apiInstance = SpotifyAPI(auth: a)
         _auth = StateObject(wrappedValue: a)
-        _api = StateObject(wrappedValue: SpotifyAPI(auth: a))
+        _api = StateObject(wrappedValue: apiInstance)
+        _mood = StateObject(wrappedValue: MoodEngine(api: apiInstance))
     }
 
     var body: some Scene {
@@ -20,6 +23,7 @@ struct SonaraApp: App {
                 .environmentObject(api)
                 .environmentObject(store)
                 .environmentObject(player)
+                .environmentObject(mood)
         }
     }
 }
@@ -41,11 +45,11 @@ struct RootTabView: View {
             TrendsView(routeToPitchArtist: $routeToPitchArtist, selectedTab: $selectedTab)
                 .tabItem { Label("Trends", systemImage: "chart.line.uptrend.xyaxis") }
                 .tag(0)
+            VibeView()
+                .tabItem { Label("Vibe", systemImage: "waveform.path.ecg") }
+                .tag(1)
             PitchView(incomingArtist: $routeToPitchArtist)
                 .tabItem { Label("Pitch", systemImage: "dollarsign.circle") }
-                .tag(1)
-            WrappedView()
-                .tabItem { Label("Wrapped", systemImage: "sparkles") }
                 .tag(2)
             ProfileView()
                 .tabItem { Label("Profile", systemImage: "person.crop.circle") }

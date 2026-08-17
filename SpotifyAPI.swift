@@ -46,9 +46,15 @@ struct RecommendationsResponse: Codable { let tracks: [SPTrack] }
 struct TopTracksResponse: Codable { let items: [SPTrack] }
 struct AlbumTracksResponse: Codable { let items: [SPTrack] }
 
+// A recently-played track with its timestamp (for the daily mood arc).
+struct RecentPlay: Identifiable, Hashable {
+    let track: SPTrack
+    let playedAt: Date
+    var id: String { track.id + playedAt.description }
+}
+
 // A new-release album surfaced in the Trends tab.
-struct TrendAlbum: Identifiable, Hashable {
-    let id: String
+struct TrendAlbum: Identifiable, Hashable {    let id: String
     let name: String
     let artist: String
     let artistID: String?
@@ -84,6 +90,34 @@ final class SpotifyAPI: ObservableObject {
 
     func me() async throws -> SPUser {
         try JSONDecoder().decode(SPUser.self, from: await request("/me"))
+    }
+
+    /// Top artists — carry genres directly. Backbone of the personality.
+    func topArtists(limit: Int = 30) async -> [SPArtist] {
+        guard let d = try? await request("/me/top/artists",
+                    query: ["limit": String(limit), "time_range": "medium_term"]) else { return [] }
+        struct R: Codable { let items: [SPArtist] }
+        return (try? JSONDecoder().decode(R.self, from: d).items) ?? []
+    }
+
+    /// Recently played WITH timestamps — powers the daily mood arc.
+    /// Confirmed still available to new apps (returns last ~50 plays).
+    func recentlyPlayed(limit: Int = 50) async -> [RecentPlay] {
+        guard let d = try? await request("/me/player/recently-played",
+                                         query: ["limit": String(limit)]) else { return [] }
+        struct R: Codable {
+            let items: [Item]
+            struct Item: Codable { let track: SPTrack; let played_at: String }
+        }
+        guard let r = try? JSONDecoder().decode(R.self, from: d) else { return [] }
+        let iso = ISO8601DateFormatter()
+        iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let isoNoFrac = ISO8601DateFormatter()
+        return r.items.compactMap { item in
+            let date = iso.date(from: item.played_at) ?? isoNoFrac.date(from: item.played_at)
+            guard let d = date else { return nil }
+            return RecentPlay(track: item.track, playedAt: d)
+        }
     }
 
     func topTracks(limit: Int = 20) async throws -> [SPTrack] {

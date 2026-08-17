@@ -1,45 +1,47 @@
-# Sonara — Trends pivot + full visual overhaul (FULL SOURCE, push everything)
+# Sonara — "Vibe" music-personality + daily-mood (FULL SOURCE, push all)
 
-## The big decision (made for Mark)
-Swipe-discovery is GONE. Spotify blocks the data it needs (recommendations,
-previews, audio features) for new apps, and we can't get extended access.
-Replaced with TRENDS — built only on data Spotify DOES give new apps
-(new releases, album art, artist search), framed as investment signal that
-feeds Pitch. This makes Sonara ONE product: spot rising artists -> value
-their catalog.
+## The new point of the app: YOUR VIBE
+A whole new tab that gives Sonara a real identity, built ENTIRELY on data
+Spotify still gives new apps (top artists' genres + recently-played with
+timestamps). No blocked endpoints. Works the moment you log in. No outside
+API, nothing that can rate-limit or break.
 
-Tabs are now: Trends · Pitch · Wrapped · Profile (4, clean).
+### What it shows
+- A living MOOD ORB — a glowing, rotating, pulsing sphere colored by YOUR
+  taste (violet=moody -> gold=bright), speed tied to your energy, bass
+  rings that swell with your low-end preference.
+- A PERSONALITY TITLE from your listening: "High-Bass Head", "Zenned-Out
+  Hippie", "Midnight Driver", "Sunlit Maximalist", etc. + a one-liner +
+  descriptor chips (High energy / Bright & upbeat / Bass-heavy...).
+- TOP GENRES as animated bars.
+- YOUR DAY IN MOOD — an energy curve across the hours you actually listen,
+  built from recently-played timestamps ("calm mornings, high-energy
+  nights"). Fills in more as you listen.
 
-## New: Trends tab (TrendsView.swift)
-- Animated HERO that rotates through rising releases every few seconds
-- "Climbing" horizontal strip with momentum % badges
-- "Fresh Releases" grid — real album art
-- Tap any release -> jumps to Pitch with a "valuing a rising artist" banner
-- Everything runs on data that's actually there, so it looks FULL
+### How it works (honest)
+Spotify still exposes artist GENRES + recently-played. Genres encode
+energy/valence/mood, so a bundled table (baked into the app) maps them to
+a mood profile locally. It's a taste-level read, not per-song truth — but
+it's real, instant, and outage-proof. We can later enrich with a free
+Last.fm key for richer mood words if you want (optional, not required).
 
-## New: Motion toolkit (Motion.swift) — the "dynamic" you asked for
-Reusable, applied across the app:
-- AuroraBackground: slow drifting color clouds behind screens
-- floating(), pulsing(), shimmering(), pressSpring() modifiers
-- CountUp animated numbers, MomentumBadge rising indicators
-These animate REAL content, so motion is visible (last time it animated
-empty data, which is why nothing moved).
+## Changes
+- NEW: MoodEngine.swift (mood table + personality/day-arc logic)
+- NEW: VibeView.swift (the orb, personality, genres, day arc)
+- SpotifyAPI.swift: added topArtists + recentlyPlayed (with timestamps)
+- App.swift: added Vibe tab; tabs are now Trends · Vibe · Pitch · Profile
+- Theme.swift: added Color.blend; Motion.swift: added shared FlowLayout
+- REMOVED WrappedView (it was the boring "15 tracks" screen — Vibe replaces it)
 
-## Removed
-- DiscoverView, TasteMapView, TasteProfile (couldn't work without the
-  blocked Spotify data). Clean removal, no dangling refs.
-
-## Pitch
-- Now accepts a routed artist from Trends (shows a banner).
-- Green line already removed; keyboard Done button already added.
-
-## HONEST STATE
-- Previews still limited by Spotify (unchanged reality) — but Trends
-  doesn't rely on previews, so it's not a problem here.
-- Momentum % is a derived signal from release recency/position (Spotify
-  gives new apps no real chart numbers). It reads as "what's fresh &
-  rising," which is honest, not fake precision.
+## Trends tap fix
+Tapping a Trends card now routes to Pitch (tab index corrected).
 
 ## Build
-Push ALL files (full source here to avoid missing-file issues).
-Run "Sonara - TestFlight". No signing/env changes.
+Push ALL files (full source). Run "Sonara - TestFlight". No signing/env changes.
+IMPORTANT: delete WrappedView.swift from your repo (it's removed here) —
+same drag-and-drop caveat as before: dragging won't delete repo files.
+Your repo should have exactly these 17 .swift files:
+App, CatalogPanel, CatalogValuationEngine, DiscoveryStore, LaunchView,
+MoodEngine, Motion, PitchView, ProfileView, ProjectionEngine,
+ProjectionEngineTests, SpotifyAPI, SpotifyCore, StreakEngine, Theme,
+TrendsView, VibeView
