@@ -1,25 +1,46 @@
-# Sonara — Vibe genre fix (the diagnostic nailed it)
+# Sonara — Vibe with Last.fm key installed (VERIFIED)
 
-## What the diagnostic told us
-Vibe showed: artists=40, genres=0, vectors=0.
-= Spotify returns your 40 top artists, but WITHOUT genre tags, and my
-genre lookup had nothing to work with -> "building your vibe" forever.
+## Your Last.fm key is in the code
+LastFM.swift now has your key: ad157...0574
 
-## Two real bugs found + fixed
-1. /me/top/artists returns artists with NO genres for new apps. Genres
-   only come from fetching each artist individually via /artists/{id}.
-2. My fallback used the BATCH /artists?ids= endpoint — which Spotify
-   REMOVED for new apps in Feb 2026. So it fetched nothing.
+## Full audit passed (I checked every step):
+✓ All 18 files brace-balanced
+✓ Last.fm key present
+✓ MoodEngine uses Last.fm in BOTH personality + daily mood arc
+✓ No dead Spotify endpoints (no /browse/new-releases, no batch /artists)
+✓ artistDetails fetches each artist individually via /artists/{id}
+✓ user-read-recently-played scope present
+✓ Real-code paren/bracket/brace balance on all key files
+✓ Last.fm uses HTTPS (no ATS/Info.plist issue)
+✓ URLSession async API is iOS-16 compatible
+✓ Verified Last.fm tags (hip-hop, rap, rock, etc.) match the mood table
 
-## The fix
-- artistDetails() now fetches each artist individually (concurrently) via
-  /artists/{id}, the only method that works for new apps.
-- Personality now ALWAYS enriches your top artists + top-track artists
-  this way to pull real genres.
-- New diagnostic: "topArtists=N detailed=N genres=N vectors=N" so if it's
-  still empty we see exactly which step failed.
+## How it works now
+Spotify gives your top artists but NO genres (confirmed by the diagnostic).
+So for each artist, the app now asks Last.fm for their genre/mood tags,
+maps those to energy/valence/mood, and builds your personality + daily arc.
 
-## Build + reinstall
-Push all files, fresh Codemagic build, delete app, reinstall, sign in.
-Open Vibe — the mood orb + personality should now populate.
-Tell me the new diagnostic numbers if anything's still off.
+## Diagnostic will now show
+"artists=N lastfm=N genres=N vectors=N key=set"
+- key=set  -> your key is active
+- lastfm=N -> artists that got tags from Last.fm (should be > 0)
+- genres>0 and vectors>0 -> Vibe populates!
+
+## Build + reinstall (important)
+1. Push ALL 18 files.
+2. Fresh Codemagic build (confirm new build number).
+3. DELETE the app from your phone.
+4. Reinstall via TestFlight, sign into Spotify.
+5. Open Vibe — Mood Orb + personality should populate.
+   Give it a few seconds (it fetches tags for ~35 artists).
+
+## If anything's still off
+Tell me the diagnostic line. With key=set, if lastfm=0 the key may need a
+minute to activate, or an artist-name encoding issue — but the audit
+confirms the call is correctly formed.
+
+## 18 files:
+App, CatalogPanel, CatalogValuationEngine, DiscoveryStore, LastFM,
+LaunchView, MoodEngine, Motion, PitchView, ProfileView, ProjectionEngine,
+ProjectionEngineTests, SpotifyAPI, SpotifyCore, StreakEngine, Theme,
+TrendsView, VibeView

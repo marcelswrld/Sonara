@@ -213,10 +213,17 @@ final class MoodEngine: ObservableObject {
         let tracks = (try? await api.topTracks(limit: 40)) ?? []
         for t in tracks { if let id = t.artists?.first?.id { artistIDs.insert(id) } }
 
-        // Fetch full records (this is where genres actually come from).
+        // Fetch full records (Spotify genres — usually EMPTY for new apps).
         let detailed = await api.artistDetails(ids: Array(artistIDs))
+        var lastfmUsed = 0
         for a in detailed {
-            for g in (a.genres ?? []) {
+            var genres = a.genres ?? []
+            // Spotify strips genres for new apps — fall back to Last.fm tags.
+            if genres.isEmpty && LastFM.isConfigured {
+                genres = await LastFM.topTags(artist: a.name)
+                if !genres.isEmpty { lastfmUsed += 1 }
+            }
+            for g in genres {
                 genreCounts[g, default: 0] += 1
                 if let v = GenreMood.vector(for: g) { vectors.append(v) }
             }
@@ -233,13 +240,15 @@ final class MoodEngine: ObservableObject {
         let top = genreCounts.sorted { $0.value > $1.value }.prefix(5)
             .map { ($0.key.capitalized, $0.value) }
 
-        debug = "topArtists=\(topArtistsList.count) detailed=\(detailed.count) genres=\(genreCounts.count) vectors=\(vectors.count)"
+        debug = "artists=\(detailed.count) lastfm=\(lastfmUsed) genres=\(genreCounts.count) vectors=\(vectors.count) key=\(LastFM.isConfigured ? "set" : "MISSING")"
 
         if vectors.isEmpty {
             personality = nil
-            lastError = detailed.isEmpty
-                ? "Couldn't load artist details from Spotify. Tap Refresh."
-                : "Your artists don't have genre tags on Spotify yet. Try listening to more established artists, then Refresh."
+            lastError = !LastFM.isConfigured
+                ? "Spotify no longer provides genre data for new apps. Add a free Last.fm API key (in LastFM.swift) to unlock your vibe — takes 2 minutes."
+                : detailed.isEmpty
+                    ? "Couldn't load artists from Spotify. Tap Refresh."
+                    : "Couldn't classify your artists yet. Tap Refresh."
             return
         }
 
@@ -256,18 +265,25 @@ final class MoodEngine: ObservableObject {
     private func computeDayArc() async {
         let plays = await api.recentlyPlayed(limit: 50)
         guard !plays.isEmpty else { dayArc = []; return }
-        // resolve each play's artist genres -> mood, bucket by local hour
         var buckets: [Int: [MoodVector]] = [:]
-        // batch-resolve unique artist ids
         let ids = Array(Set(plays.compactMap { $0.track.artists?.first?.id }))
         let details = await api.artistDetails(ids: ids)
-        let genreByArtist = Dictionary(uniqueKeysWithValues: details.map { ($0.id, $0.genres ?? []) })
+
+        // Build artistID -> mood vectors, using Last.fm tags when Spotify
+        // genres are empty (same as the personality path).
+        var vectorsByArtist: [String: [MoodVector]] = [:]
+        for a in details {
+            var genres = a.genres ?? []
+            if genres.isEmpty && LastFM.isConfigured {
+                genres = await LastFM.topTags(artist: a.name)
+            }
+            vectorsByArtist[a.id] = genres.compactMap { GenreMood.vector(for: $0) }
+        }
 
         let cal = Calendar.current
         for play in plays {
             guard let artistID = play.track.artists?.first?.id else { continue }
-            let genres = genreByArtist[artistID] ?? []
-            let vecs = genres.compactMap { GenreMood.vector(for: $0) }
+            let vecs = vectorsByArtist[artistID] ?? []
             guard !vecs.isEmpty else { continue }
             let hour = cal.component(.hour, from: play.playedAt)
             buckets[hour, default: []].append(MoodVector.average(vecs))
