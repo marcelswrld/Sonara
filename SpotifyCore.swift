@@ -38,6 +38,8 @@ enum SpotifyConfig {
     static let scopes = [
         "user-library-read", "user-library-modify",
         "user-top-read",
+        "user-read-recently-played",
+        "user-follow-modify", "user-follow-read",
         "playlist-read-private", "playlist-modify-public",
         "playlist-modify-private", "playlist-read-collaborative",
         "user-read-private"

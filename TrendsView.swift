@@ -99,7 +99,7 @@ struct TrendsView: View {
                 Text(a.artist).font(Theme.Type_.body(15, weight: .medium))
                     .foregroundStyle(.white.opacity(0.8))
                 Button {
-                    route(to: a.artistID)
+                    route(to: a.artist)
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "chart.line.uptrend.xyaxis")
@@ -129,7 +129,7 @@ struct TrendsView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: Theme.Space.m) {
                     ForEach(Array(albums.prefix(10).enumerated()), id: \.element.id) { i, a in
-                        RisingCard(album: a) { route(to: a.artistID) }
+                        RisingCard(album: a) { route(to: a.artist) }
                             .opacity(appear ? 1 : 0)
                             .offset(y: appear ? 0 : 20)
                             .animation(.spring(response: 0.5, dampingFraction: 0.8)
@@ -148,7 +148,7 @@ struct TrendsView: View {
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12),
                                 GridItem(.flexible(), spacing: 12)], spacing: 12) {
                 ForEach(Array(albums.enumerated()), id: \.element.id) { i, a in
-                    FreshCard(album: a) { route(to: a.artistID) }
+                    FreshCard(album: a) { route(to: a.artist) }
                         .opacity(appear ? 1 : 0)
                         .animation(.easeOut(duration: 0.5).delay(Double(i) * 0.03), value: appear)
                 }
@@ -202,18 +202,20 @@ struct RisingCard: View {
     let album: TrendAlbum
     let tap: () -> Void
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ZStack(alignment: .topTrailing) {
-                artwork(album.artworkURL, size: 150)
-                MomentumBadge(percent: album.momentum).padding(8)
+        Button(action: tap) {
+            VStack(alignment: .leading, spacing: 8) {
+                ZStack(alignment: .topTrailing) {
+                    artwork(album.artworkURL, size: 150)
+                    MomentumBadge(percent: album.momentum).padding(8)
+                }
+                Text(album.name).font(Theme.Type_.body(14, weight: .semibold))
+                    .foregroundStyle(Theme.Palette.chalk).lineLimit(1)
+                Text(album.artist).font(Theme.Type_.caption())
+                    .foregroundStyle(Theme.Palette.mist).lineLimit(1)
             }
-            Text(album.name).font(Theme.Type_.body(14, weight: .semibold))
-                .foregroundStyle(Theme.Palette.chalk).lineLimit(1)
-            Text(album.artist).font(Theme.Type_.caption())
-                .foregroundStyle(Theme.Palette.mist).lineLimit(1)
+            .frame(width: 150)
         }
-        .frame(width: 150)
-        .pressSpring(tap)
+        .buttonStyle(.plain)
     }
 }
 
@@ -221,27 +223,29 @@ struct FreshCard: View {
     let album: TrendAlbum
     let tap: () -> Void
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            artwork(album.artworkURL, size: nil)
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(album.name).font(Theme.Type_.body(13, weight: .semibold))
-                        .foregroundStyle(Theme.Palette.chalk).lineLimit(1)
-                    Text(album.artist).font(Theme.Type_.caption())
-                        .foregroundStyle(Theme.Palette.mist).lineLimit(1)
+        Button(action: tap) {
+            VStack(alignment: .leading, spacing: 8) {
+                artwork(album.artworkURL, size: nil)
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(album.name).font(Theme.Type_.body(13, weight: .semibold))
+                            .foregroundStyle(Theme.Palette.chalk).lineLimit(1)
+                        Text(album.artist).font(Theme.Type_.caption())
+                            .foregroundStyle(Theme.Palette.mist).lineLimit(1)
+                    }
+                    Spacer()
+                    Image(systemName: "chart.line.uptrend.xyaxis")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(Theme.Palette.mint)
                 }
-                Spacer()
-                Image(systemName: "chart.line.uptrend.xyaxis")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(Theme.Palette.mint)
             }
+            .padding(10)
+            .background(RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Theme.Palette.panel)
+                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Theme.Palette.hairline, lineWidth: 1)))
         }
-        .padding(10)
-        .background(RoundedRectangle(cornerRadius: 18, style: .continuous)
-            .fill(Theme.Palette.panel)
-            .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Theme.Palette.hairline, lineWidth: 1)))
-        .pressSpring(tap)
+        .buttonStyle(.plain)
     }
 }
 

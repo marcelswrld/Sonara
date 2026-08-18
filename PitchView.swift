@@ -47,8 +47,13 @@ struct PitchView: View {
     private var routedBanner: some View {
         HStack(spacing: Theme.Space.s) {
             Image(systemName: "sparkles").foregroundStyle(Theme.Palette.mint)
-            Text("Valuing a rising artist from Trends. Enter their last-12-months streaming revenue to project a catalog value.")
-                .font(Theme.Type_.caption()).foregroundStyle(Theme.Palette.mist)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(incomingArtist ?? "")
+                    .font(Theme.Type_.body(15, weight: .semibold))
+                    .foregroundStyle(Theme.Palette.chalk)
+                Text("Enter this artist's last-12-months streaming revenue to project a catalog value.")
+                    .font(Theme.Type_.caption()).foregroundStyle(Theme.Palette.mist)
+            }
             Spacer(minLength: 0)
             Button {
                 withAnimation { incomingArtist = nil }

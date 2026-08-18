@@ -117,6 +117,27 @@ enum GenreMood {
         }
         return nil
     }
+
+    /// When a genre string doesn't match the table, infer a rough mood from
+    /// keywords in the NAME so the personality is never empty for a user who
+    /// clearly has listening history. Errs toward neutral-but-plausible.
+    static func heuristicVector(for genre: String) -> MoodVector {
+        let g = genre.lowercased()
+        var v = MoodVector.neutral
+        func bump(_ kp: WritableKeyPath<MoodVector, Double>, _ x: Double) {
+            v[keyPath: kp] = Swift.min(Swift.max(v[keyPath: kp] + x, 0), 1)
+        }
+        // energy cues
+        for w in ["hard","heavy","core","speed","thrash","aggress","rave","bass","drill"] where g.contains(w) { bump(\.energy, 0.25); bump(\.bass, 0.2) }
+        for w in ["chill","calm","sleep","ambient","soft","slow","dream","mellow","quiet","lo-fi","lofi"] where g.contains(w) { bump(\.energy, -0.25) }
+        // valence cues
+        for w in ["happy","sunny","tropical","dance","party","pop","feel good","upbeat"] where g.contains(w) { bump(\.valence, 0.2) }
+        for w in ["sad","dark","doom","depress","melanch","gloom","emo","goth"] where g.contains(w) { bump(\.valence, -0.25) }
+        // organic cues
+        for w in ["acoustic","folk","singer","piano","classical","jazz","blues","country","orchestr"] where g.contains(w) { bump(\.organic, 0.3) }
+        for w in ["electro","synth","edm","techno","house","digital","cyber","future"] where g.contains(w) { bump(\.organic, -0.3); bump(\.energy, 0.15) }
+        return v
+    }
 }
 
 // =====================================================================
@@ -178,21 +199,23 @@ final class MoodEngine: ObservableObject {
 
     // MARK: Personality from top artists' genres
     private func computePersonality() async {
-        // Top artists carry genres directly.
-        let artists = await api.topArtists(limit: 30)
         var genreCounts: [String: Int] = [:]
         var vectors: [MoodVector] = []
+
+        // 1) Top artists carry genres directly.
+        let artists = await api.topArtists(limit: 40)
         for a in artists {
             for g in (a.genres ?? []) {
                 genreCounts[g, default: 0] += 1
                 if let v = GenreMood.vector(for: g) { vectors.append(v) }
             }
         }
-        // Fallback: if top artists lacked genres, enrich from top tracks' artists.
-        if vectors.isEmpty {
-            let tracks = (try? await api.topTracks(limit: 20)) ?? []
-            let ids = Array(Set(tracks.compactMap { $0.artists?.first?.id })).prefix(20)
-            let details = await api.artistDetails(ids: Array(ids))
+
+        // 2) Enrich from top tracks' artists (more genre coverage).
+        let tracks = (try? await api.topTracks(limit: 30)) ?? []
+        let trackArtistIDs = Array(Set(tracks.compactMap { $0.artists?.first?.id })).prefix(30)
+        if !trackArtistIDs.isEmpty {
+            let details = await api.artistDetails(ids: Array(trackArtistIDs))
             for a in details {
                 for g in (a.genres ?? []) {
                     genreCounts[g, default: 0] += 1
@@ -201,20 +224,35 @@ final class MoodEngine: ObservableObject {
             }
         }
 
-        let mood = MoodVector.average(vectors)
-        let top = genreCounts.sorted { $0.value > $1.value }.prefix(5).map { ($0.key.capitalized, $0.value) }
-        let title = Self.title(for: mood, topGenre: top.first?.0)
-        let desc = Self.descriptors(for: mood)
-        let blurb = Self.blurb(for: mood, title: title)
+        // 3) If we have genres but none matched the table, still derive a
+        //    reasonable mood from the genre NAMES (keyword heuristics) so we
+        //    NEVER show an empty state when the user clearly has listening data.
+        if vectors.isEmpty && !genreCounts.isEmpty {
+            for (g, count) in genreCounts {
+                let v = GenreMood.heuristicVector(for: g)
+                for _ in 0..<count { vectors.append(v) }
+            }
+        }
+
+        let top = genreCounts.sorted { $0.value > $1.value }.prefix(5)
+            .map { ($0.key.capitalized, $0.value) }
 
         if vectors.isEmpty {
+            // Only truly empty if the account has NO top artists/tracks at all.
             personality = nil
-            lastError = "Listen on Spotify a bit more, then check back — we build this from your top artists."
-        } else {
-            personality = Personality(mood: mood, title: title, descriptors: desc,
-                                      blurb: blurb, topGenres: Array(top),
-                                      sampleSize: vectors.count)
+            lastError = artists.isEmpty
+                ? "We couldn't read your top artists yet. Make sure you've listened on Spotify recently, then tap Refresh."
+                : "Your top artists don't have genre tags yet. Listen a bit more and check back."
+            return
         }
+
+        let mood = MoodVector.average(vectors)
+        let title = Self.title(for: mood, topGenre: top.first?.0)
+        personality = Personality(mood: mood, title: title,
+                                  descriptors: Self.descriptors(for: mood),
+                                  blurb: Self.blurb(for: mood, title: title),
+                                  topGenres: Array(top), sampleSize: vectors.count)
+        lastError = nil
     }
 
     // MARK: Daily mood from recently-played timestamps
