@@ -178,6 +178,7 @@ final class MoodEngine: ObservableObject {
     @Published private(set) var dayArc: [HourMood] = []
     @Published private(set) var loading = false
     @Published private(set) var lastError: String?
+    @Published private(set) var debug: String = ""
 
     struct HourMood: Identifiable {
         let id = UUID()
@@ -236,6 +237,8 @@ final class MoodEngine: ObservableObject {
 
         let top = genreCounts.sorted { $0.value > $1.value }.prefix(5)
             .map { ($0.key.capitalized, $0.value) }
+
+        debug = "artists=\(artists.count) genres=\(genreCounts.count) vectors=\(vectors.count)"
 
         if vectors.isEmpty {
             // Only truly empty if the account has NO top artists/tracks at all.

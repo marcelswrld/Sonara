@@ -29,6 +29,11 @@ struct VibeView: View {
                 Text("Your Vibe").font(Theme.Type_.display(32))
                     .foregroundStyle(Theme.Palette.chalk)
 
+                if !mood.debug.isEmpty {
+                    Text(mood.debug).font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(Theme.Palette.mint.opacity(0.7))
+                }
+
                 if mood.loading && mood.personality == nil {
                     loadingState
                 } else if let p = mood.personality {

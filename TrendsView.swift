@@ -17,6 +17,7 @@ struct TrendsView: View {
     @State private var loading = false
     @State private var heroIndex = 0
     @State private var appear = false
+    @State private var debug = ""
 
     var body: some View {
         ZStack {
@@ -34,6 +35,7 @@ struct TrendsView: View {
         loading = true
         let fetched = await api.newReleaseAlbums(limit: 24)
         albums = fetched.sorted { $0.momentum > $1.momentum }
+        debug = "Loaded \(albums.count) albums · signedIn=\(auth.isSignedIn)"
         loading = false
         withAnimation(.easeOut(duration: 0.7)) { appear = true }
         // cycle the hero
@@ -72,6 +74,10 @@ struct TrendsView: View {
                 .foregroundStyle(Theme.Palette.chalk)
             Text("What's rising — tap to value the catalog")
                 .font(Theme.Type_.caption()).foregroundStyle(Theme.Palette.mist)
+            if !debug.isEmpty {
+                Text(debug).font(.system(size: 10, design: .monospaced))
+                    .foregroundStyle(Theme.Palette.mint.opacity(0.7))
+            }
         }
     }
 

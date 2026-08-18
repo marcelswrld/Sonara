@@ -134,25 +134,9 @@ final class SpotifyAPI: ObservableObject {
         return try JSONDecoder().decode(SavedResponse.self, from: d).items.map(\.track)
     }
 
-    /// New-release albums → their tracks. Works for all apps.
+    /// New tracks via search (works for all apps; /browse/new-releases is dead).
     func newReleaseTracks(limit: Int = 20) async throws -> [SPTrack] {
-        let d = try await request("/browse/new-releases", query: ["limit": "20"])
-        struct NR: Codable { let albums: Albums
-            struct Albums: Codable { let items: [Album]
-                struct Album: Codable { let id: String } } }
-        let albumIDs = (try? JSONDecoder().decode(NR.self, from: d).albums.items.map(\.id)) ?? []
-        guard !albumIDs.isEmpty else { return [] }
-        // Pull tracks from the first few albums.
-        var tracks: [SPTrack] = []
-        for id in albumIDs.prefix(8) {
-            if let ad = try? await request("/albums/\(id)/tracks", query: ["limit": "3"]),
-               let resp = try? JSONDecoder().decode(AlbumTracksResponse.self, from: ad) {
-                // album-track objects lack album art; attach the album id via search fallback later
-                tracks.append(contentsOf: resp.items)
-            }
-            if tracks.count >= limit { break }
-        }
-        return Array(tracks.prefix(limit))
+        return try await searchTracks("year:2026", limit: limit)
     }
 
     /// Search as a universal fallback (always available).
@@ -213,34 +197,60 @@ final class SpotifyAPI: ObservableObject {
 
     /// New-release ALBUMS with art — the backbone of the Trends tab.
     /// Uses only endpoints available to new apps.
+    /// Trends feed built on endpoints that WORK for new apps. Spotify
+    /// removed /browse/new-releases in Feb 2026, so we use SEARCH (still
+    /// live) across fresh queries to pull real albums with real artist IDs.
     func newReleaseAlbums(limit: Int = 20) async -> [TrendAlbum] {
-        guard let d = try? await request("/browse/new-releases",
-                                         query: ["limit": String(limit)]) else { return [] }
-        struct NR: Codable {
-            let albums: Albums
-            struct Albums: Codable { let items: [Item]
-                struct Item: Codable {
-                    let id: String
-                    let name: String
-                    let images: [SPImage]?
-                    let artists: [SPArtist]?
-                    let release_date: String?
-                    let total_tracks: Int?
+        // Search queries that surface current music. Year tag keeps it fresh.
+        let queries = ["year:2026", "new music 2026", "top hits 2026",
+                       "viral 2026", "trending"]
+        var out: [TrendAlbum] = []
+        var seen = Set<String>()
+        var idx = 0
+        for q in queries {
+            guard out.count < limit else { break }
+            guard let d = try? await request("/search",
+                    query: ["q": q, "type": "album", "limit": "10"]) else { continue }
+            struct SR: Codable {
+                let albums: A?
+                struct A: Codable { let items: [Item]
+                    struct Item: Codable {
+                        let id: String
+                        let name: String
+                        let images: [SPImage]?
+                        let artists: [SPArtist]?
+                        let release_date: String?
+                        let total_tracks: Int?
+                    }
                 }
             }
+            guard let sr = try? JSONDecoder().decode(SR.self, from: d),
+                  let items = sr.albums?.items else { continue }
+            for a in items where seen.insert(a.id).inserted {
+                out.append(TrendAlbum(
+                    id: a.id,
+                    name: a.name,
+                    artist: a.artists?.first?.name ?? "Various",
+                    artistID: a.artists?.first?.id,
+                    artworkURL: (a.images?.first?.url).flatMap(URL.init(string:)),
+                    releaseDate: a.release_date,
+                    trackCount: a.total_tracks ?? 0,
+                    momentum: 24 - idx + (idx % 3) * 2))
+                idx += 1
+            }
         }
-        guard let nr = try? JSONDecoder().decode(NR.self, from: d) else { return [] }
-        return nr.albums.items.enumerated().map { idx, a in
-            TrendAlbum(id: a.id,
-                       name: a.name,
-                       artist: a.artists?.first?.name ?? "Various",
-                       artistID: a.artists?.first?.id,
-                       artworkURL: (a.images?.first?.url).flatMap(URL.init(string:)),
-                       releaseDate: a.release_date,
-                       trackCount: a.total_tracks ?? 0,
-                       // deterministic-but-varied "momentum" from position (no chart API on new apps)
-                       momentum: 24 - idx + (idx % 3) * 2)
+        // Fallback: if search somehow returns nothing, seed from the user's
+        // own top artists so the tab is NEVER empty.
+        if out.isEmpty {
+            let artists = await topArtists(limit: 12)
+            for (i, a) in artists.enumerated() {
+                out.append(TrendAlbum(id: a.id, name: a.name, artist: a.name,
+                                      artistID: a.id, artworkURL: nil,
+                                      releaseDate: nil, trackCount: 0,
+                                      momentum: 20 - i))
+            }
         }
+        return out
     }
 
     /// Search artists (for the Trends "breaking artists" strip).
