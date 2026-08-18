@@ -180,12 +180,23 @@ final class SpotifyAPI: ObservableObject {
     }
 
     /// Full artist objects (for genres, which track objects don't include).
+    /// Full artist objects (for genres). Spotify REMOVED the batch
+    /// /artists?ids= endpoint for new apps in Feb 2026, so we must fetch
+    /// each artist individually via /artists/{id}. Done concurrently.
     func artistDetails(ids: [String]) async -> [SPArtist] {
         guard !ids.isEmpty else { return [] }
-        let joined = ids.prefix(50).joined(separator: ",")
-        guard let d = try? await request("/artists", query: ["ids": joined]) else { return [] }
-        struct AR: Codable { let artists: [SPArtist] }
-        return (try? JSONDecoder().decode(AR.self, from: d).artists) ?? []
+        let capped = Array(ids.prefix(40))
+        var results: [SPArtist] = []
+        await withTaskGroup(of: SPArtist?.self) { group in
+            for id in capped {
+                group.addTask {
+                    guard let d = try? await self.request("/artists/\(id)") else { return nil }
+                    return try? JSONDecoder().decode(SPArtist.self, from: d)
+                }
+            }
+            for await a in group { if let a = a { results.append(a) } }
+        }
+        return results
     }
 
     /// Genres for a single track's primary artist (for taste seeds).

@@ -1,55 +1,25 @@
-# Sonara — THE REAL FIX (I verified against your actual GitHub repo)
+# Sonara — Vibe genre fix (the diagnostic nailed it)
 
-## What I did differently this time
-I cloned your ACTUAL GitHub repo and confirmed the code there is correct
-and current — so files ARE syncing. Then I traced the real runtime bug.
+## What the diagnostic told us
+Vibe showed: artists=40, genres=0, vectors=0.
+= Spotify returns your 40 top artists, but WITHOUT genre tags, and my
+genre lookup had nothing to work with -> "building your vibe" forever.
 
-## THE ACTUAL BUG (my mistake)
-The Trends tab was calling Spotify's /browse/new-releases endpoint —
-which Spotify REMOVED for new apps in Feb 2026 (my own research flagged
-this, and I used it anyway — that's on me). It returned nothing, so:
-- Trends cards had no real data behind them -> tapping did nothing
-- (Vibe was separately blocked by the missing recently-played scope,
-  fixed last round + reinforced here)
+## Two real bugs found + fixed
+1. /me/top/artists returns artists with NO genres for new apps. Genres
+   only come from fetching each artist individually via /artists/{id}.
+2. My fallback used the BATCH /artists?ids= endpoint — which Spotify
+   REMOVED for new apps in Feb 2026. So it fetched nothing.
 
-## THE FIX
-- Rewrote Trends to use /search (which WORKS for new apps) instead of the
-  dead /browse/new-releases. Now it pulls real albums with real artist IDs,
-  so cards have data AND tapping routes to Pitch with the artist name.
-- Removed EVERY call to the dead endpoint across the codebase.
-- Added a fallback: if search returns nothing, Trends seeds from your top
-  artists, so it is NEVER empty.
+## The fix
+- artistDetails() now fetches each artist individually (concurrently) via
+  /artists/{id}, the only method that works for new apps.
+- Personality now ALWAYS enriches your top artists + top-track artists
+  this way to pull real genres.
+- New diagnostic: "topArtists=N detailed=N genres=N vectors=N" so if it's
+  still empty we see exactly which step failed.
 
-## ON-SCREEN DIAGNOSTICS (new)
-Both Trends and Vibe now show a tiny green diagnostic line at the top:
-- Trends: "Loaded N albums · signedIn=true/false"
-- Vibe:   "artists=N genres=N vectors=N"
-This means if ANYTHING is still empty, you can tell me the exact numbers
-and I'll know precisely what's failing instead of guessing. Once it all
-works we remove these lines.
-
-## CRITICAL — you MUST do a clean reinstall + re-auth
-Because scopes changed (recently-played) AND to be 100% sure you're on the
-new build:
-1. DELETE the app from your phone entirely.
-2. Run a fresh Codemagic build, confirm a NEW build number.
-3. Install that build via TestFlight.
-4. Sign into Spotify fresh.
-5. Listen to a couple songs, open Trends and Vibe.
-
-## Files changed
-- SpotifyAPI.swift  — Trends uses /search; dead endpoint removed everywhere
-- TrendsView.swift  — on-screen diagnostic
-- MoodEngine.swift  — on-screen diagnostic
-- VibeView.swift    — shows the diagnostic
-
-## Repo must have exactly these 17 files:
-App, CatalogPanel, CatalogValuationEngine, DiscoveryStore, LaunchView,
-MoodEngine, Motion, PitchView, ProfileView, ProjectionEngine,
-ProjectionEngineTests, SpotifyAPI, SpotifyCore, StreakEngine, Theme,
-TrendsView, VibeView
-
-## What to tell me after building
-Read me the two diagnostic lines (Trends + Vibe). Those numbers tell us
-exactly what's happening. If Trends says "Loaded 0 albums" we know search
-failed; if Vibe says "artists=0" we know top-artists failed (usually auth).
+## Build + reinstall
+Push all files, fresh Codemagic build, delete app, reinstall, sign in.
+Open Vibe — the mood orb + personality should now populate.
+Tell me the new diagnostic numbers if anything's still off.

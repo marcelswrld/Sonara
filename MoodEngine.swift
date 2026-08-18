@@ -203,31 +203,26 @@ final class MoodEngine: ObservableObject {
         var genreCounts: [String: Int] = [:]
         var vectors: [MoodVector] = []
 
-        // 1) Top artists carry genres directly.
-        let artists = await api.topArtists(limit: 40)
-        for a in artists {
+        // Top-artists list does NOT include genres for new apps, so gather
+        // the artist IDs, then fetch each artist's full record (which has
+        // genres) individually.
+        let topArtistsList = await api.topArtists(limit: 40)
+        var artistIDs = Set(topArtistsList.map(\.id))
+
+        // Also fold in the artists behind the user's top tracks.
+        let tracks = (try? await api.topTracks(limit: 40)) ?? []
+        for t in tracks { if let id = t.artists?.first?.id { artistIDs.insert(id) } }
+
+        // Fetch full records (this is where genres actually come from).
+        let detailed = await api.artistDetails(ids: Array(artistIDs))
+        for a in detailed {
             for g in (a.genres ?? []) {
                 genreCounts[g, default: 0] += 1
                 if let v = GenreMood.vector(for: g) { vectors.append(v) }
             }
         }
 
-        // 2) Enrich from top tracks' artists (more genre coverage).
-        let tracks = (try? await api.topTracks(limit: 30)) ?? []
-        let trackArtistIDs = Array(Set(tracks.compactMap { $0.artists?.first?.id })).prefix(30)
-        if !trackArtistIDs.isEmpty {
-            let details = await api.artistDetails(ids: Array(trackArtistIDs))
-            for a in details {
-                for g in (a.genres ?? []) {
-                    genreCounts[g, default: 0] += 1
-                    if let v = GenreMood.vector(for: g) { vectors.append(v) }
-                }
-            }
-        }
-
-        // 3) If we have genres but none matched the table, still derive a
-        //    reasonable mood from the genre NAMES (keyword heuristics) so we
-        //    NEVER show an empty state when the user clearly has listening data.
+        // If genres exist but none matched the table, derive from names.
         if vectors.isEmpty && !genreCounts.isEmpty {
             for (g, count) in genreCounts {
                 let v = GenreMood.heuristicVector(for: g)
@@ -238,14 +233,13 @@ final class MoodEngine: ObservableObject {
         let top = genreCounts.sorted { $0.value > $1.value }.prefix(5)
             .map { ($0.key.capitalized, $0.value) }
 
-        debug = "artists=\(artists.count) genres=\(genreCounts.count) vectors=\(vectors.count)"
+        debug = "topArtists=\(topArtistsList.count) detailed=\(detailed.count) genres=\(genreCounts.count) vectors=\(vectors.count)"
 
         if vectors.isEmpty {
-            // Only truly empty if the account has NO top artists/tracks at all.
             personality = nil
-            lastError = artists.isEmpty
-                ? "We couldn't read your top artists yet. Make sure you've listened on Spotify recently, then tap Refresh."
-                : "Your top artists don't have genre tags yet. Listen a bit more and check back."
+            lastError = detailed.isEmpty
+                ? "Couldn't load artist details from Spotify. Tap Refresh."
+                : "Your artists don't have genre tags on Spotify yet. Try listening to more established artists, then Refresh."
             return
         }
 
