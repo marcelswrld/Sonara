@@ -1,10 +1,9 @@
 import SwiftUI
 
 // =====================================================================
-// TrendsView — replaces swipe-discovery. Built ONLY on data Spotify
-// gives new apps (new releases, album art, artist search), framed as
-// investment signal that feeds Pitch. Rich, animated, tappable.
-// Tapping an album/artist routes to Pitch with that artist prefilled.
+// TrendsView — REAL chart data from Last.fm (free), categorised by
+// genre. No fake percentages: every number shown (listeners, plays) is
+// real data from Last.fm. Tap an artist for a full stats screen.
 // =====================================================================
 
 struct TrendsView: View {
@@ -13,40 +12,26 @@ struct TrendsView: View {
     @Binding var routeToPitchArtist: String?
     @Binding var selectedTab: Int
 
-    @State private var albums: [TrendAlbum] = []
+    @State private var selectedGenre: String? = nil      // nil = Global
+    @State private var artists: [LFArtist] = []
+    @State private var page = 1
     @State private var loading = false
-    @State private var heroIndex = 0
-    @State private var appear = false
-    @State private var debug = ""
+    @State private var loadingMore = false
+    @State private var detailArtist: LFArtist?
+
+    private var genres: [String] { LastFM.genreBuckets }
 
     var body: some View {
         ZStack {
             AuroraBackground()
-            if auth.isSignedIn {
-                content
-            } else {
-                connectPrompt
-            }
+            content
         }
-        .task(id: auth.isSignedIn) { if auth.isSignedIn && albums.isEmpty { await load() } }
-    }
-
-    private func load() async {
-        loading = true
-        let fetched = await api.newReleaseAlbums(limit: 24)
-        albums = fetched.sorted { $0.momentum > $1.momentum }
-        debug = "Loaded \(albums.count) albums · signedIn=\(auth.isSignedIn)"
-        loading = false
-        withAnimation(.easeOut(duration: 0.7)) { appear = true }
-        // cycle the hero
-        startHeroCycle()
-    }
-
-    private func startHeroCycle() {
-        guard albums.count > 1 else { return }
-        Timer.scheduledTimer(withTimeInterval: 4, repeats: true) { _ in
-            withAnimation(.easeInOut(duration: 0.6)) {
-                heroIndex = (heroIndex + 1) % min(albums.count, 5)
+        .task { if artists.isEmpty { await load(reset: true) } }
+        .sheet(item: $detailArtist) { a in
+            ArtistDetailSheet(artist: a) { name in
+                detailArtist = nil
+                routeToPitchArtist = name
+                selectedTab = 2
             }
         }
     }
@@ -55,12 +40,14 @@ struct TrendsView: View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: Theme.Space.l) {
                 header
-                if loading && albums.isEmpty {
+                genrePicker
+                if loading && artists.isEmpty {
                     loadingState
+                } else if artists.isEmpty {
+                    emptyState
                 } else {
-                    if !albums.isEmpty { hero }
-                    risingSection
-                    freshSection
+                    artistList
+                    loadMoreButton
                 }
             }
             .padding(Theme.Space.l)
@@ -72,206 +59,189 @@ struct TrendsView: View {
         VStack(alignment: .leading, spacing: 2) {
             Text("Trends").font(Theme.Type_.display(32))
                 .foregroundStyle(Theme.Palette.chalk)
-            Text("What's rising — tap to value the catalog")
+            Text(selectedGenre == nil
+                 ? "Most-listened artists right now"
+                 : "Top \(selectedGenre!.capitalized) artists")
                 .font(Theme.Type_.caption()).foregroundStyle(Theme.Palette.mist)
-            if !debug.isEmpty {
-                Text(debug).font(.system(size: 10, design: .monospaced))
-                    .foregroundStyle(Theme.Palette.mint.opacity(0.7))
-            }
         }
     }
 
-    // MARK: Hero — big rotating featured rising release
-    @ViewBuilder private var hero: some View {
-        let a = albums[min(heroIndex, albums.count - 1)]
-        ZStack(alignment: .bottomLeading) {
-            if let url = a.artworkURL {
-                AsyncImage(url: url) { img in
-                    img.resizable().aspectRatio(contentMode: .fill)
-                } placeholder: { Theme.Palette.panel }
-            } else { Theme.Palette.panel }
-
-            LinearGradient(colors: [.clear, .black.opacity(0.85)],
-                           startPoint: .center, endPoint: .bottom)
-
-            VStack(alignment: .leading, spacing: Theme.Space.s) {
-                HStack {
-                    Text("RISING NOW").font(.system(size: 11, weight: .bold, design: .rounded))
-                        .tracking(1.5).foregroundStyle(Theme.Palette.mint)
-                    MomentumBadge(percent: a.momentum)
+    // Genre categories — fixes the "random artists" problem
+    private var genrePicker: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                chip("Global", isOn: selectedGenre == nil) {
+                    selectedGenre = nil; Task { await load(reset: true) }
                 }
-                Text(a.name).font(Theme.Type_.display(26))
-                    .foregroundStyle(.white).lineLimit(2)
-                Text(a.artist).font(Theme.Type_.body(15, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.8))
-                Button {
-                    route(to: a.artist)
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "chart.line.uptrend.xyaxis")
-                        Text("Value this artist").font(Theme.Type_.body(14, weight: .semibold))
-                    }
-                    .foregroundStyle(Theme.Palette.ink)
-                    .padding(.vertical, 10).padding(.horizontal, 18)
-                    .background(Theme.Palette.mint, in: Capsule())
-                }
-                .padding(.top, 4)
-            }
-            .padding(Theme.Space.l)
-        }
-        .frame(height: 340)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous)
-            .stroke(Theme.Palette.mint.opacity(0.3), lineWidth: 1))
-        .shadow(color: Theme.Palette.mint.opacity(0.15), radius: 30, y: 14)
-        .id(a.id) // triggers transition on hero change
-        .transition(.opacity.combined(with: .scale(scale: 1.03)))
-    }
-
-    // MARK: Rising — horizontal momentum strip
-    private var risingSection: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.s) {
-            sectionTitle("Climbing", "flame.fill")
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: Theme.Space.m) {
-                    ForEach(Array(albums.prefix(10).enumerated()), id: \.element.id) { i, a in
-                        RisingCard(album: a) { route(to: a.artist) }
-                            .opacity(appear ? 1 : 0)
-                            .offset(y: appear ? 0 : 20)
-                            .animation(.spring(response: 0.5, dampingFraction: 0.8)
-                                        .delay(Double(i) * 0.06), value: appear)
+                ForEach(genres, id: \.self) { g in
+                    chip(g.capitalized, isOn: selectedGenre == g) {
+                        selectedGenre = g; Task { await load(reset: true) }
                     }
                 }
-                .padding(.horizontal, 2)
             }
+            .padding(.horizontal, 2)
         }
     }
 
-    // MARK: Fresh — grid of new releases
-    private var freshSection: some View {
-        VStack(alignment: .leading, spacing: Theme.Space.m) {
-            sectionTitle("Fresh Releases", "sparkles")
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12),
-                                GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                ForEach(Array(albums.enumerated()), id: \.element.id) { i, a in
-                    FreshCard(album: a) { route(to: a.artist) }
-                        .opacity(appear ? 1 : 0)
-                        .animation(.easeOut(duration: 0.5).delay(Double(i) * 0.03), value: appear)
+    private func chip(_ label: String, isOn: Bool, tap: @escaping () -> Void) -> some View {
+        Button(action: tap) {
+            Text(label)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(isOn ? Theme.Palette.ink : Theme.Palette.chalk)
+                .padding(.horizontal, 14).padding(.vertical, 8)
+                .background(isOn ? Theme.Palette.mint : Theme.Palette.panel, in: Capsule())
+                .overlay(Capsule().stroke(Theme.Palette.hairline, lineWidth: isOn ? 0 : 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var artistList: some View {
+        VStack(spacing: 10) {
+            ForEach(Array(artists.enumerated()), id: \.element.id) { i, a in
+                Button { detailArtist = a } label: {
+                    ArtistRow(rank: i + 1, artist: a)
                 }
+                .buttonStyle(.plain)
             }
         }
     }
 
-    private func sectionTitle(_ t: String, _ icon: String) -> some View {
-        HStack(spacing: 6) {
-            Image(systemName: icon).font(.system(size: 13, weight: .bold))
-                .foregroundStyle(Theme.Palette.mint)
-            Text(t).font(Theme.Type_.display(20)).foregroundStyle(Theme.Palette.chalk)
+    private var loadMoreButton: some View {
+        Button {
+            Task { await loadMore() }
+        } label: {
+            HStack(spacing: 8) {
+                if loadingMore { ProgressView().tint(Theme.Palette.ink) }
+                Text(loadingMore ? "Loading…" : "Load more")
+                    .font(Theme.Type_.body(15, weight: .semibold))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 13)
+            .background(Theme.Palette.mint, in: Capsule())
+            .foregroundStyle(Theme.Palette.ink)
         }
+        .buttonStyle(.plain)
+        .disabled(loadingMore)
     }
 
     private var loadingState: some View {
-        VStack(spacing: Theme.Space.m) {
-            ForEach(0..<3, id: \.self) { _ in
-                RoundedRectangle(cornerRadius: 20).fill(Theme.Palette.panel)
-                    .frame(height: 120).shimmering()
+        VStack(spacing: 10) {
+            ForEach(0..<6, id: \.self) { _ in
+                RoundedRectangle(cornerRadius: 16).fill(Theme.Palette.panel)
+                    .frame(height: 72).shimmering()
             }
         }
     }
 
-    private var connectPrompt: some View {
+    private var emptyState: some View {
         VStack(spacing: Theme.Space.m) {
-            Image(systemName: "chart.line.uptrend.xyaxis").font(.system(size: 46))
+            Image(systemName: "chart.bar.xaxis").font(.system(size: 40))
                 .foregroundStyle(Theme.Palette.mint).pulsing()
-            Text("Connect Spotify to see what's rising")
-                .font(Theme.Type_.display(20)).foregroundStyle(Theme.Palette.chalk)
-                .multilineTextAlignment(.center)
-            Button { auth.signIn() } label: {
-                Text("Connect Spotify").font(Theme.Type_.body(16, weight: .semibold))
-                    .padding(.vertical, 12).padding(.horizontal, 24)
+            Text("Couldn't load charts").font(Theme.Type_.display(19))
+                .foregroundStyle(Theme.Palette.chalk)
+            Button { Task { await load(reset: true) } } label: {
+                Text("Retry").font(Theme.Type_.body(15, weight: .semibold))
+                    .padding(.vertical, 10).padding(.horizontal, 24)
                     .background(Theme.Palette.mint, in: Capsule())
                     .foregroundStyle(Theme.Palette.ink)
             }
         }
-        .padding(Theme.Space.xl)
+        .frame(maxWidth: .infinity).padding(.top, 40)
     }
 
-    private func route(to artistID: String?) {
-        routeToPitchArtist = artistID
-        withAnimation { selectedTab = 2 } // jump to Pitch
+    // MARK: data
+    private func load(reset: Bool) async {
+        if reset { loading = true; page = 1; artists = [] }
+        let fetched = await fetchPage(page)
+        artists = fetched
+        loading = false
     }
-}
 
-// MARK: - Cards
-
-struct RisingCard: View {
-    let album: TrendAlbum
-    let tap: () -> Void
-    var body: some View {
-        Button(action: tap) {
-            VStack(alignment: .leading, spacing: 8) {
-                ZStack(alignment: .topTrailing) {
-                    artwork(album.artworkURL, size: 150)
-                    MomentumBadge(percent: album.momentum).padding(8)
-                }
-                Text(album.name).font(Theme.Type_.body(14, weight: .semibold))
-                    .foregroundStyle(Theme.Palette.chalk).lineLimit(1)
-                Text(album.artist).font(Theme.Type_.caption())
-                    .foregroundStyle(Theme.Palette.mist).lineLimit(1)
-            }
-            .frame(width: 150)
-        }
-        .buttonStyle(.plain)
+    private func loadMore() async {
+        loadingMore = true
+        page += 1
+        let more = await fetchPage(page)
+        // de-dupe by name
+        var seen = Set(artists.map(\.name))
+        artists.append(contentsOf: more.filter { seen.insert($0.name).inserted })
+        loadingMore = false
     }
-}
 
-struct FreshCard: View {
-    let album: TrendAlbum
-    let tap: () -> Void
-    var body: some View {
-        Button(action: tap) {
-            VStack(alignment: .leading, spacing: 8) {
-                artwork(album.artworkURL, size: nil)
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(album.name).font(Theme.Type_.body(13, weight: .semibold))
-                            .foregroundStyle(Theme.Palette.chalk).lineLimit(1)
-                        Text(album.artist).font(Theme.Type_.caption())
-                            .foregroundStyle(Theme.Palette.mist).lineLimit(1)
-                    }
-                    Spacer()
-                    Image(systemName: "chart.line.uptrend.xyaxis")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Theme.Palette.mint)
-                }
-            }
-            .padding(10)
-            .background(RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Theme.Palette.panel)
-                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .stroke(Theme.Palette.hairline, lineWidth: 1)))
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-// shared artwork loader
-@ViewBuilder
-func artwork(_ url: URL?, size: CGFloat?) -> some View {
-    Group {
-        if let url {
-            AsyncImage(url: url) { img in
-                img.resizable().aspectRatio(contentMode: .fill)
-            } placeholder: {
-                Theme.Palette.panel.overlay(ProgressView().tint(Theme.Palette.mint))
-            }
+    private func fetchPage(_ p: Int) async -> [LFArtist] {
+        if let g = selectedGenre {
+            var list = await LastFM.topArtists(genre: g, limit: 12, page: p)
+            // enrich the first few with REAL listener/play stats
+            list = await enrich(list, count: 12)
+            return list
         } else {
-            Theme.Palette.panel.overlay(
-                Image(systemName: "music.note").foregroundStyle(Theme.Palette.mist))
+            return await LastFM.globalTopArtists(limit: 12, page: p)
         }
     }
-    .frame(width: size, height: size ?? 150)
-    .frame(maxWidth: size == nil ? .infinity : size)
-    .aspectRatio(1, contentMode: .fill)
-    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+
+    // tag.getTopArtists doesn't include stats, so fetch real ones.
+    private func enrich(_ list: [LFArtist], count: Int) async -> [LFArtist] {
+        var out: [LFArtist] = []
+        await withTaskGroup(of: LFArtist.self) { group in
+            for a in list.prefix(count) {
+                group.addTask {
+                    if let info = await LastFM.artistInfo(name: a.name) {
+                        return LFArtist(name: a.name, listeners: info.listeners,
+                                        playcount: info.playcount, imageURL: a.imageURL,
+                                        genre: a.genre)
+                    }
+                    return a
+                }
+            }
+            for await r in group { out.append(r) }
+        }
+        // preserve original ordering
+        let order = Dictionary(uniqueKeysWithValues: list.enumerated().map { ($1.name, $0) })
+        return out.sorted { (order[$0.name] ?? 0) < (order[$1.name] ?? 0) }
+    }
+}
+
+// MARK: - Artist row (real stats, no fake %)
+
+struct ArtistRow: View {
+    let rank: Int
+    let artist: LFArtist
+    var body: some View {
+        HStack(spacing: Theme.Space.m) {
+            Text("\(rank)")
+                .font(.system(size: 15, weight: .heavy, design: .rounded))
+                .foregroundStyle(Theme.Palette.mint)
+                .frame(width: 26)
+            Group {
+                if let url = artist.imageURL {
+                    AsyncImage(url: url) { $0.resizable().aspectRatio(contentMode: .fill) }
+                        placeholder: { Theme.Palette.panel }
+                } else {
+                    Theme.Palette.panel.overlay(
+                        Image(systemName: "music.mic").foregroundStyle(Theme.Palette.mist))
+                }
+            }
+            .frame(width: 52, height: 52)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(artist.name).font(Theme.Type_.body(15, weight: .semibold))
+                    .foregroundStyle(Theme.Palette.chalk).lineLimit(1)
+                if artist.listeners > 0 {
+                    Text("\(artist.listenersText) listeners · \(artist.playsText) plays")
+                        .font(Theme.Type_.caption()).foregroundStyle(Theme.Palette.mist)
+                } else if let g = artist.genre {
+                    Text(g.capitalized).font(Theme.Type_.caption())
+                        .foregroundStyle(Theme.Palette.mist)
+                }
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold))
+                .foregroundStyle(Theme.Palette.mist)
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous)
+            .fill(Theme.Palette.panel.opacity(0.85))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Theme.Palette.hairline, lineWidth: 1)))
+    }
 }

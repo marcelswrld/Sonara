@@ -93,9 +93,9 @@ final class SpotifyAPI: ObservableObject {
     }
 
     /// Top artists — carry genres directly. Backbone of the personality.
-    func topArtists(limit: Int = 30) async -> [SPArtist] {
+    func topArtists(limit: Int = 30, range: String = "medium_term") async -> [SPArtist] {
         guard let d = try? await request("/me/top/artists",
-                    query: ["limit": String(limit), "time_range": "medium_term"]) else { return [] }
+                    query: ["limit": String(limit), "time_range": range]) else { return [] }
         struct R: Codable { let items: [SPArtist] }
         return (try? JSONDecoder().decode(R.self, from: d).items) ?? []
     }
@@ -120,9 +120,9 @@ final class SpotifyAPI: ObservableObject {
         }
     }
 
-    func topTracks(limit: Int = 20) async throws -> [SPTrack] {
+    func topTracks(limit: Int = 20, range: String = "medium_term") async throws -> [SPTrack] {
         let d = try await request("/me/top/tracks", query: ["limit": String(limit),
-                                                            "time_range": "medium_term"])
+                                                            "time_range": range])
         return try JSONDecoder().decode(TopTracksResponse.self, from: d).items
     }
 

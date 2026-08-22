@@ -206,12 +206,26 @@ final class MoodEngine: ObservableObject {
         // Top-artists list does NOT include genres for new apps, so gather
         // the artist IDs, then fetch each artist's full record (which has
         // genres) individually.
-        let topArtistsList = await api.topArtists(limit: 40)
-        var artistIDs = Set(topArtistsList.map(\.id))
+        // RECENCY MATTERS: weight what you've been playing LATELY.
+        // short_term = last 4 weeks, medium_term = ~6 months.
+        let recentArtists = await api.topArtists(limit: 30, range: "short_term")
+        let longerArtists = await api.topArtists(limit: 30, range: "medium_term")
+        // recent artists count 3x so a new listening phase (e.g. oldies)
+        // actually changes your vibe.
+        var weight: [String: Int] = [:]
+        for a in recentArtists { weight[a.id, default: 0] += 3 }
+        for a in longerArtists { weight[a.id, default: 0] += 1 }
+        // fold in artists from what you literally just played
+        for p in await api.recentlyPlayed(limit: 50) {
+            if let id = p.track.artists?.first?.id { weight[id, default: 0] += 2 }
+        }
+        let topArtistsList = recentArtists
+        var artistIDs = Set(weight.keys)
 
-        // Also fold in the artists behind the user's top tracks.
-        let tracks = (try? await api.topTracks(limit: 40)) ?? []
-        for t in tracks { if let id = t.artists?.first?.id { artistIDs.insert(id) } }
+        // Also fold in the artists behind recent top tracks.
+        let tracks = (try? await api.topTracks(limit: 30, range: "short_term")) ?? []
+        for t in tracks { if let id = t.artists?.first?.id {
+            artistIDs.insert(id); weight[id, default: 0] += 2 } }
 
         // Fetch full records (Spotify genres — usually EMPTY for new apps).
         let detailed = await api.artistDetails(ids: Array(artistIDs))
@@ -223,9 +237,12 @@ final class MoodEngine: ObservableObject {
                 genres = await LastFM.topTags(artist: a.name)
                 if !genres.isEmpty { lastfmUsed += 1 }
             }
+            let w = max(weight[a.id] ?? 1, 1)
             for g in genres {
-                genreCounts[g, default: 0] += 1
-                if let v = GenreMood.vector(for: g) { vectors.append(v) }
+                genreCounts[g, default: 0] += w
+                if let v = GenreMood.vector(for: g) {
+                    for _ in 0..<w { vectors.append(v) }   // weight recency
+                }
             }
         }
 
