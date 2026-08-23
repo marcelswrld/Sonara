@@ -8,7 +8,7 @@ import SwiftUI
 
 struct ArtistDetailSheet: View {
     let artist: LFArtist
-    let valueAction: (String) -> Void
+    let valueAction: (PitchSeed) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var listeners = 0
@@ -17,6 +17,20 @@ struct ArtistDetailSheet: View {
     @State private var tracks: [LFTrack] = []
     @State private var tags: [String] = []
     @State private var loading = true
+    @State private var previews: [DZTrack] = []
+    @State private var heroImage: URL?
+    @StateObject private var audio = PreviewAudio()
+    @EnvironmentObject var api: SpotifyAPI
+
+    private var revenueEstimate: Double {
+        LFArtist(name: artist.name, listeners: listeners, playcount: playcount,
+                 imageURL: nil, genre: nil).estimatedAnnualRevenue
+    }
+    private var superfan: (score: Int, label: String) {
+        let a = LFArtist(name: artist.name, listeners: listeners,
+                         playcount: playcount, imageURL: nil, genre: nil)
+        return (a.superfanScore, a.superfanLabel)
+    }
 
     var body: some View {
         ZStack {
@@ -27,6 +41,8 @@ struct ArtistDetailSheet: View {
                     statsRow
                     if !tags.isEmpty { tagRow }
                     if let bio, !bio.isEmpty { bioCard(bio) }
+                    if listeners > 0 { superfanCard }
+                    if !previews.isEmpty { previewCard }
                     if !tracks.isEmpty { topTracksCard }
                     valueButton
                 }
@@ -35,6 +51,7 @@ struct ArtistDetailSheet: View {
             }
         }
         .task { await load() }
+        .onDisappear { audio.stop() }
     }
 
     private var hero: some View {
@@ -46,7 +63,7 @@ struct ArtistDetailSheet: View {
                         .foregroundStyle(Theme.Palette.mist)
                 }
             }
-            if let url = artist.imageURL {
+            if let url = heroImage ?? artist.imageURL {
                 AsyncImage(url: url) { $0.resizable().aspectRatio(contentMode: .fill) }
                     placeholder: { Theme.Palette.panel }
                     .frame(height: 200)
@@ -125,8 +142,61 @@ struct ArtistDetailSheet: View {
         .padding(Theme.Space.l).background(card)
     }
 
+    private var superfanCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("SUPERFAN SCORE").font(Theme.Type_.caption()).tracking(1.5)
+                .foregroundStyle(Theme.Palette.mist)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("\(superfan.score)")
+                    .font(.system(size: 40, weight: .heavy, design: .rounded))
+                    .foregroundStyle(Theme.Palette.mint)
+                Text(superfan.label).font(Theme.Type_.body(15, weight: .semibold))
+                    .foregroundStyle(Theme.Palette.chalk)
+            }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(Theme.Palette.ink).frame(height: 8)
+                    Capsule().fill(LinearGradient(colors: [Theme.Palette.mint, Color(hex: 0xF5A15E)],
+                                                  startPoint: .leading, endPoint: .trailing))
+                        .frame(width: geo.size.width * CGFloat(superfan.score) / 100, height: 8)
+                }
+            }.frame(height: 8)
+            Text("Plays per listener measures how repeatedly fans return. Loyal repeat listening supports a more durable catalog value.")
+                .font(Theme.Type_.caption()).foregroundStyle(Theme.Palette.mist)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Theme.Space.l).background(card)
+    }
+
+    private var previewCard: some View {
+        VStack(alignment: .leading, spacing: Theme.Space.s) {
+            Text("PLAY A PREVIEW").font(Theme.Type_.caption()).tracking(1.5)
+                .foregroundStyle(Theme.Palette.mist)
+            ForEach(previews.prefix(5)) { t in
+                Button { audio.toggle(t) } label: {
+                    HStack(spacing: Theme.Space.m) {
+                        Image(systemName: audio.playingID == t.id ? "pause.circle.fill" : "play.circle.fill")
+                            .font(.system(size: 28))
+                            .foregroundStyle(Theme.Palette.mint)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(t.title).font(Theme.Type_.body(14, weight: .medium))
+                                .foregroundStyle(Theme.Palette.chalk).lineLimit(1)
+                            Text("30s preview").font(Theme.Type_.caption())
+                                .foregroundStyle(Theme.Palette.mist)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                }
+                .buttonStyle(.plain)
+                if t.id != previews.prefix(5).last?.id { Divider().overlay(Theme.Palette.hairline) }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(Theme.Space.l).background(card)
+    }
+
     private var valueButton: some View {
-        Button { valueAction(artist.name) } label: {
+        Button { valueAction(PitchSeed(name: artist.name, estimatedRevenue: revenueEstimate)) } label: {
             HStack(spacing: 8) {
                 Image(systemName: "chart.line.uptrend.xyaxis")
                 Text("Value this artist's catalog")
@@ -166,5 +236,9 @@ struct ArtistDetailSheet: View {
         tracks = tr
         tags = tg
         loading = false
+        // real artwork from Spotify (Last.fm only returns a placeholder star)
+        heroImage = await api.artistImage(named: artist.name)
+        // playable 30s previews from Deezer (free, no auth)
+        previews = await Deezer.search(artist: artist.name, limit: 8)
     }
 }

@@ -1,51 +1,47 @@
-# Sonara — REAL data, no paid API needed
+# Sonara — playback, real artist photos, Superfan Score, working Pitch handoff
 
-## The answer to "any other free APIs?" — YES: Last.fm (key you already have)
-I tested Last.fm's full endpoint list against their live docs. Beyond the
-genre tags we were already using, it ALSO provides — free, no extra key:
-  • tag.getTopArtists   -> top artists BY GENRE  (fixes "random artists")
-  • chart.getTopArtists -> real global chart      (fixes "new music 2024" junk)
-  • artist.getInfo      -> REAL listeners + playcount (replaces my fake %)
-  • artist.getTopTracks -> real top tracks (artist detail screen)
-No Viberate (EUR300/mo) and no Soundcharts needed for Trends.
+## 1) PLAYBACK — now works (free, no key)
+Spotify won't give previews to new apps, so I added DEEZER's public API
+(no key, no auth). On the artist screen you get a "PLAY A PREVIEW" list —
+tap any track for a real 30-second clip. Plays in silent mode too.
+NEW FILE: Deezer.swift (search + AVPlayer wrapper).
+Honest note: coverage is good but not universal — if Deezer doesn't have
+a track, the section simply doesn't appear (no dead buttons).
 
-## FIXED: the fake momentum numbers
-You were right — the old "+23% rising" was FAKE (computed from list
-position). It's GONE. Trends now shows only REAL numbers: actual listener
-counts and play counts from Last.fm.
+## 2) FIXED: white stars instead of artist photos
+Last.fm deliberately serves a placeholder star for every artist (they
+dropped image licensing). Fixed by resolving the REAL photo from Spotify
+by artist name (we already have Spotify auth). Applies to the Trends list
+and the artist detail hero.
 
-## FIXED: random/uncategorised artists
-Trends now has genre category chips: Global, Hip-Hop, Pop, Rock,
-Electronic, R&B, Indie, Jazz, Classic Rock. Pick one, get the real top
-artists for it. No more "new music 2024" garbage.
+## 3) FIXED: "Value this artist" did nothing with numbers
+It now PREFILLS the Pitch calculator with an estimated annual revenue
+derived from the artist's real play data, so you land on a populated
+valuation instead of an empty form. The banner says it's an estimate and
+you can edit it to refine. (Routing now carries name + revenue.)
 
-## NEW: "Load more" (your idea)
-Loads the next page of artists on demand. Works around any per-call limit.
-
-## NEW: Artist detail screen (tap any artist)
-Real stats: listeners, total plays, genre tags, biography, and top 5
-tracks with play counts. Plus "Value this artist's catalog" -> Pitch.
-This replaces the old "tap does nothing but say enter revenue".
-
-## FIXED: Vibe didn't reflect your recent oldies
-The personality was built from your 6-month history. Now it weights:
-  recent (last 4 weeks) x3, what you just played x2, 6-month x1
-So a new listening phase actually changes your vibe.
+## 4) NEW + UNIQUE: SUPERFAN SCORE
+Sonara's own derived metric: plays per listener. High = a small obsessive
+fanbase; low = wide but casual reach. Labels: Cult following / Devoted
+fans / Steady listeners / Casual reach. Shown as a badge in the Trends
+list and a full card on the artist screen.
+Why it's genuinely useful here: repeat listening predicts DURABLE
+streaming revenue, which is exactly what the Pitch valuation models. It
+ties the discovery half of the app to the valuation half — something no
+generic music app does.
 
 ## Files
-NEW: ArtistDetailSheet.swift
-REWRITTEN: LastFM.swift (full client), TrendsView.swift
-CHANGED: MoodEngine.swift (recency weighting), SpotifyAPI.swift (time ranges)
+NEW: Deezer.swift, ArtistDetailSheet.swift
+CHANGED: LastFM.swift, TrendsView.swift, PitchView.swift, App.swift,
+         SpotifyAPI.swift, Motion.swift
 
-## 19 files now — make sure your repo matches:
-App, ArtistDetailSheet, CatalogPanel, CatalogValuationEngine,
+## 20 files — repo must match:
+App, ArtistDetailSheet, CatalogPanel, CatalogValuationEngine, Deezer,
 DiscoveryStore, LastFM, LaunchView, MoodEngine, Motion, PitchView,
 ProfileView, ProjectionEngine, ProjectionEngineTests, SpotifyAPI,
 SpotifyCore, StreakEngine, Theme, TrendsView, VibeView
 
-## For MARK's black screen
-The app is iOS-only — it will NOT run on a MacBook. On his iPhone 11 it
-should work (iOS 16+). Most likely he has a stale/broken old build:
-have him DELETE the app and reinstall the newest TestFlight build.
-If still black, get the crash log (App Store Connect -> TestFlight ->
-Crashes) and send it over.
+## Build
+Push all 20, fresh build, reinstall. Open Trends -> tap an artist ->
+you should see a real photo, superfan score, previews you can play, and
+"Value this artist's catalog" landing on a filled-in Pitch.

@@ -30,7 +30,7 @@ struct SonaraApp: App {
 
 struct RootTabView: View {
     @State private var selectedTab = 0
-    @State private var routeToPitchArtist: String?
+    @State private var routeToPitchArtist: PitchSeed?
 
     init() {
         let appearance = UITabBarAppearance()

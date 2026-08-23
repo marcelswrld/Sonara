@@ -192,3 +192,30 @@ struct MomentumBadge: View {
                     in: Capsule())
     }
 }
+
+// MARK: - Superfan badge (Sonara's signature derived metric)
+
+struct SuperfanBadge: View {
+    let score: Int
+    let label: String
+    var body: some View {
+        HStack(spacing: 5) {
+            Image(systemName: "flame.fill").font(.system(size: 9, weight: .bold))
+            Text(label).font(.system(size: 10, weight: .bold, design: .rounded))
+            Text("\(score)").font(.system(size: 10, weight: .heavy, design: .rounded))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 5).padding(.vertical, 1)
+                .background(tint.opacity(0.45), in: Capsule())
+        }
+        .foregroundStyle(tint)
+        .padding(.horizontal, 7).padding(.vertical, 3)
+        .background(tint.opacity(0.13), in: Capsule())
+    }
+    private var tint: Color {
+        switch score {
+        case 70...: return Color(hex: 0xF5A15E)
+        case 45..<70: return Theme.Palette.mint
+        default: return Theme.Palette.mist
+        }
+    }
+}

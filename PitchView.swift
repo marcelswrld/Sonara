@@ -7,8 +7,14 @@ import Charts
 // element is the decay curve drawn behind the valuation.
 // =====================================================================
 
+struct PitchSeed: Identifiable, Equatable {
+    let name: String
+    let estimatedRevenue: Double
+    var id: String { name }
+}
+
 struct PitchView: View {
-    @Binding var incomingArtist: String?
+    @Binding var incomingArtist: PitchSeed?
     @State private var revenueInput: String = "50000"
     @State private var scenario: Scenario = .base
     @State private var sixYears = false
@@ -48,10 +54,10 @@ struct PitchView: View {
         HStack(spacing: Theme.Space.s) {
             Image(systemName: "sparkles").foregroundStyle(Theme.Palette.mint)
             VStack(alignment: .leading, spacing: 2) {
-                Text(incomingArtist ?? "")
+                Text(incomingArtist?.name ?? "")
                     .font(Theme.Type_.body(15, weight: .semibold))
                     .foregroundStyle(Theme.Palette.chalk)
-                Text("Enter this artist's last-12-months streaming revenue to project a catalog value.")
+                Text("Revenue estimated from real play data — edit it to refine the valuation.")
                     .font(Theme.Type_.caption()).foregroundStyle(Theme.Palette.mist)
             }
             Spacer(minLength: 0)
@@ -93,6 +99,18 @@ struct PitchView: View {
             .scrollDismissesKeyboard(.interactively)
             .contentShape(Rectangle())
             .onTapGesture { revenueFocused = false }
+        }
+        // When an artist arrives from Trends, PREFILL the estimated revenue
+        // so the valuation is populated instead of an empty calculator.
+        .onChange(of: incomingArtist) { seed in
+            if let seed, seed.estimatedRevenue > 0 {
+                revenueInput = String(Int(seed.estimatedRevenue))
+            }
+        }
+        .onAppear {
+            if let seed = incomingArtist, seed.estimatedRevenue > 0 {
+                revenueInput = String(Int(seed.estimatedRevenue))
+            }
         }
         .toolbar {
             // The decimal keypad has no return key; give it a Done button.

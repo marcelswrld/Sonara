@@ -17,6 +17,7 @@ struct SPArtist: Codable, Hashable, Identifiable {
     let id: String
     let name: String
     let genres: [String]?
+    let images: [SPImage]?
 }
 
 struct SPAlbum: Codable, Hashable {
@@ -265,6 +266,18 @@ final class SpotifyAPI: ObservableObject {
     }
 
     /// Search artists (for the Trends "breaking artists" strip).
+    /// Real artist image via Spotify search — Last.fm only returns a
+    /// placeholder star, so we resolve artwork here by name.
+    func artistImage(named name: String) async -> URL? {
+        guard let d = try? await request("/search",
+                query: ["q": name, "type": "artist", "limit": "1"]) else { return nil }
+        struct SR: Codable { let artists: A?
+            struct A: Codable { let items: [SPArtist] } }
+        guard let first = (try? JSONDecoder().decode(SR.self, from: d))?.artists?.items.first,
+              let s = first.images?.first?.url else { return nil }
+        return URL(string: s)
+    }
+
     func searchArtists(_ q: String, limit: Int = 10) async -> [SPArtist] {
         guard let d = try? await request("/search",
                     query: ["q": q, "type": "artist", "limit": String(limit)]) else { return [] }

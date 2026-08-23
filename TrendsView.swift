@@ -9,7 +9,7 @@ import SwiftUI
 struct TrendsView: View {
     @EnvironmentObject var auth: SpotifyAuth
     @EnvironmentObject var api: SpotifyAPI
-    @Binding var routeToPitchArtist: String?
+    @Binding var routeToPitchArtist: PitchSeed?
     @Binding var selectedTab: Int
 
     @State private var selectedGenre: String? = nil      // nil = Global
@@ -28,11 +28,12 @@ struct TrendsView: View {
         }
         .task { if artists.isEmpty { await load(reset: true) } }
         .sheet(item: $detailArtist) { a in
-            ArtistDetailSheet(artist: a) { name in
+            ArtistDetailSheet(artist: a) { seed in
                 detailArtist = nil
-                routeToPitchArtist = name
+                routeToPitchArtist = seed
                 selectedTab = 2
             }
+            .environmentObject(api)
         }
     }
 
@@ -174,7 +175,8 @@ struct TrendsView: View {
             list = await enrich(list, count: 12)
             return list
         } else {
-            return await LastFM.globalTopArtists(limit: 12, page: p)
+            let list = await LastFM.globalTopArtists(limit: 12, page: p)
+            return await enrich(list, count: 12)
         }
     }
 
@@ -184,12 +186,14 @@ struct TrendsView: View {
         await withTaskGroup(of: LFArtist.self) { group in
             for a in list.prefix(count) {
                 group.addTask {
-                    if let info = await LastFM.artistInfo(name: a.name) {
-                        return LFArtist(name: a.name, listeners: info.listeners,
-                                        playcount: info.playcount, imageURL: a.imageURL,
-                                        genre: a.genre)
-                    }
-                    return a
+                    async let infoT = LastFM.artistInfo(name: a.name)
+                    async let imgT = api.artistImage(named: a.name)
+                    let (info, img) = await (infoT, imgT)
+                    return LFArtist(name: a.name,
+                                    listeners: info?.listeners ?? a.listeners,
+                                    playcount: info?.playcount ?? a.playcount,
+                                    imageURL: img ?? a.imageURL,
+                                    genre: a.genre)
                 }
             }
             for await r in group { out.append(r) }
@@ -229,6 +233,7 @@ struct ArtistRow: View {
                 if artist.listeners > 0 {
                     Text("\(artist.listenersText) listeners · \(artist.playsText) plays")
                         .font(Theme.Type_.caption()).foregroundStyle(Theme.Palette.mist)
+                    SuperfanBadge(score: artist.superfanScore, label: artist.superfanLabel)
                 } else if let g = artist.genre {
                     Text(g.capitalized).font(Theme.Type_.caption())
                         .foregroundStyle(Theme.Palette.mist)

@@ -22,6 +22,40 @@ struct LFArtist: Identifiable, Hashable {
     // Human-friendly stat strings
     var listenersText: String { LastFM.compact(listeners) }
     var playsText: String { LastFM.compact(playcount) }
+
+    /// SUPERFAN SCORE — plays per listener. A real, derived signal:
+    /// high = a small but obsessive fanbase (repeat listening), low = wide
+    /// but casual reach. Directly relevant to catalog value, because loyal
+    /// repeat listeners produce more durable streaming revenue.
+    var playsPerListener: Double {
+        guard listeners > 0 else { return 0 }
+        return Double(playcount) / Double(listeners)
+    }
+    var superfanScore: Int {
+        // ~5 plays/listener is average; map to a 0-100 feel.
+        guard playsPerListener > 0 else { return 0 }
+        return Swift.min(Int((playsPerListener / 15.0) * 100), 100)
+    }
+    var superfanLabel: String {
+        switch superfanScore {
+        case 70...: return "Cult following"
+        case 45..<70: return "Devoted fans"
+        case 25..<45: return "Steady listeners"
+        default: return "Casual reach"
+        }
+    }
+
+    /// Rough annual streaming revenue estimate from real play data.
+    /// Last.fm plays are a SAMPLE of global listening, so we scale up and
+    /// apply a typical per-stream payout. This is an ESTIMATE to seed the
+    /// Pitch calculator, never presented as fact.
+    var estimatedAnnualRevenue: Double {
+        guard playcount > 0 else { return 0 }
+        let scaleFactor = 60.0        // Last.fm sample -> global listening
+        let perStream = 0.0035        // typical blended payout
+        let annualShare = 0.18        // share of lifetime plays in a year
+        return Double(playcount) * scaleFactor * perStream * annualShare
+    }
 }
 
 struct LFTrack: Identifiable, Hashable {
