@@ -38,11 +38,11 @@ targets:
         SWIFT_VERSION: "5.9"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
-        INFOPLIST_KEY_CFBundleDisplayName: Sonara
+        INFOPLIST_KEY_CFBundleDisplayName: Aimnubis
     info:
       path: Info.plist
       properties:
-        CFBundleDisplayName: Sonara
+        CFBundleDisplayName: Aimnubis
         CFBundleIconName: AppIcon
         CFBundleURLTypes:
           - CFBundleURLSchemes: [sonara]

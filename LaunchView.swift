@@ -35,7 +35,7 @@ struct SonaraSplash: View {
                 .scaleEffect(pulse ? 1.1 : 0.9)
                 .animation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true), value: pulse)
             VStack(spacing: Theme.Space.s) {
-                Text("Sonara")
+                Text("Aimnubis")
                     .font(Theme.Type_.display(46))
                     .foregroundStyle(Theme.Palette.chalk)
                 Text("discover · pitch")

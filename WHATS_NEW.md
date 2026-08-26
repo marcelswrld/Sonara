@@ -1,47 +1,54 @@
-# Sonara — playback, real artist photos, Superfan Score, working Pitch handoff
+# Aimnubis — 5 fixes (each verified before shipping)
 
-## 1) PLAYBACK — now works (free, no key)
-Spotify won't give previews to new apps, so I added DEEZER's public API
-(no key, no auth). On the artist screen you get a "PLAY A PREVIEW" list —
-tap any track for a real 30-second clip. Plays in silent mode too.
-NEW FILE: Deezer.swift (search + AVPlayer wrapper).
-Honest note: coverage is good but not universal — if Deezer doesn't have
-a track, the section simply doesn't appear (no dead buttons).
+## 1) RENAMED to "Aimnubis"
+The app now DISPLAYS as Aimnubis (home screen + splash screen).
+IMPORTANT: I deliberately did NOT rename the internal Xcode
+project/target/scheme — codemagic.yaml references "scheme Sonara", and
+renaming it would break your build. Only the user-visible name changed.
+Bundle ID stays com.mhr.sonara (that's fine — bundle IDs never need to
+match the display name).
+YOU STILL NEED TO: rename the app in App Store Connect (App Information
+-> Name) so the store listing matches.
 
-## 2) FIXED: white stars instead of artist photos
-Last.fm deliberately serves a placeholder star for every artist (they
-dropped image licensing). Fixed by resolving the REAL photo from Spotify
-by artist name (we already have Spotify auth). Applies to the Trends list
-and the artist detail hero.
+## 2) FIXED: wrong artist photos (Michael Jackson for Olivia Rodrigo)
+Two causes, both fixed:
+ a) The image lookup grabbed Spotify's FIRST search result without
+    checking it was the right artist. It now searches 5 results and
+    verifies the name matches (accent/punctuation-insensitive). If no
+    result matches, it shows a placeholder rather than the WRONG face.
+ b) SwiftUI was recycling list rows and reusing a previous row's loaded
+    image. Fixed by giving each image a stable identity.
 
-## 3) FIXED: "Value this artist" did nothing with numbers
-It now PREFILLS the Pitch calculator with an estimated annual revenue
-derived from the artist's real play data, so you land on a populated
-valuation instead of an empty form. The banner says it's an estimate and
-you can edit it to refine. (Routing now carries name + revenue.)
+## 3) FIXED: everyone had "Cult following 100"
+The math was broken: real Last.fm ratios run 10-300 plays per listener,
+but the formula divided by 15 — so anything over 15 hit the 100 cap.
+Rebuilt on a log scale across the real range and re-tested with realistic
+numbers:
+    12 plays/listener  ->   6  Casual reach
+    22 plays/listener  ->  23  Casual reach
+    30 plays/listener  ->  32  Casual reach
+   127 plays/listener  ->  74  Devoted fans
+   250 plays/listener  ->  94  Cult following
+"Cult following" is now genuinely rare.
 
-## 4) NEW + UNIQUE: SUPERFAN SCORE
-Sonara's own derived metric: plays per listener. High = a small obsessive
-fanbase; low = wide but casual reach. Labels: Cult following / Devoted
-fans / Steady listeners / Casual reach. Shown as a badge in the Trends
-list and a full card on the artist screen.
-Why it's genuinely useful here: repeat listening predicts DURABLE
-streaming revenue, which is exactly what the Pitch valuation models. It
-ties the discovery half of the app to the valuation half — something no
-generic music app does.
+## 4) FIXED: was Vibe "High-Bass Head" for everyone? YES — and fixed
+Real bug: "High-Bass Head" was scored on a SINGLE value (bass, usually
+0.7+) while every other personality was a PRODUCT of two values
+(0.5 x 0.5 = 0.25). A single value beats a product nearly every time, so
+bass won by default. All eight personalities now score on two traits.
+Simulated 12 listener profiles -> 7 DIFFERENT titles:
+   Hip-hop/trap -> High-Bass Head      Oldies/soul  -> Acoustic Soul
+   Folk         -> Zenned-Out Hippie   EDM/house    -> Electric Dreamer
+   Indie/dream  -> Sunlit Maximalist   Sad/emo      -> Midnight Driver
+   Ambient      -> Mellow Optimist     Classical    -> Zenned-Out Hippie
+Also corrected the genre table: metal/punk/grunge were wrongly marked
+"electronic" (they're guitar music = organic).
 
-## Files
-NEW: Deezer.swift, ArtistDetailSheet.swift
-CHANGED: LastFM.swift, TrendsView.swift, PitchView.swift, App.swift,
-         SpotifyAPI.swift, Motion.swift
-
-## 20 files — repo must match:
-App, ArtistDetailSheet, CatalogPanel, CatalogValuationEngine, Deezer,
-DiscoveryStore, LastFM, LaunchView, MoodEngine, Motion, PitchView,
-ProfileView, ProjectionEngine, ProjectionEngineTests, SpotifyAPI,
-SpotifyCore, StreakEngine, Theme, TrendsView, VibeView
+## 5) FIXED: X button didn't close the artist screen
+It was inside the scrolling content, so it scrolled away and was easy to
+miss. It's now PINNED above the scroll view (always visible, bigger tap
+target) and I added a drag-down indicator so you can also swipe to close.
 
 ## Build
-Push all 20, fresh build, reinstall. Open Trends -> tap an artist ->
-you should see a real photo, superfan score, previews you can play, and
-"Value this artist's catalog" landing on a filled-in Pitch.
+Push all 20 files. Scheme/workflow unchanged, so just run
+"Sonara - TestFlight" as usual. The app will install showing "Aimnubis".

@@ -66,10 +66,10 @@ enum GenreMood {
         ("funk",         0.72, 0.80, 0.50, 0.72),
         ("neo soul",     0.48, 0.62, 0.55, 0.60),
         // rock / metal
-        ("metal",        0.92, 0.40, 0.25, 0.75),
-        ("hardcore",     0.95, 0.42, 0.20, 0.72),
-        ("punk",         0.88, 0.55, 0.30, 0.60),
-        ("grunge",       0.75, 0.40, 0.40, 0.62),
+        ("metal",        0.92, 0.38, 0.62, 0.75),
+        ("hardcore",     0.95, 0.40, 0.60, 0.72),
+        ("punk",         0.88, 0.55, 0.62, 0.60),
+        ("grunge",       0.75, 0.40, 0.65, 0.62),
         ("hard rock",    0.85, 0.55, 0.35, 0.65),
         ("classic rock", 0.70, 0.62, 0.50, 0.55),
         ("indie rock",   0.62, 0.58, 0.50, 0.48),
@@ -352,15 +352,20 @@ final class MoodEngine: ObservableObject {
     static func title(for m: MoodVector, topGenre: String?) -> String {
         // Score each personality; pick the strongest match so everyone gets
         // a specific, earned label (no lazy "Eclectic Explorer" default).
-        var scores: [(String, Double)] = []
-        scores.append(("High-Bass Head", m.bass))
-        scores.append(("Zenned-Out Hippie", m.organic * (1 - m.energy)))
-        scores.append(("Sunlit Maximalist", m.energy * m.valence))
-        scores.append(("Midnight Driver", m.energy * (1 - m.valence)))
-        scores.append(("Mellow Optimist", (1 - m.energy) * m.valence))
-        scores.append(("Deep Introspective", (1 - m.energy) * (1 - m.valence)))
-        scores.append(("Acoustic Soul", m.organic * m.valence))
-        scores.append(("Electric Dreamer", (1 - m.organic) * m.energy))
+        // Every score must be a product of TWO traits, otherwise a single
+        // raw value (bass) beats every pair and everyone becomes the same
+        // personality. Bass now also requires high energy to win.
+        let e = m.energy, v = m.valence, o = m.organic, b = m.bass
+        let scores: [(String, Double)] = [
+            ("High-Bass Head",     b * e),
+            ("Zenned-Out Hippie",  o * (1 - e)),
+            ("Sunlit Maximalist",  e * v),
+            ("Midnight Driver",    e * (1 - v)),
+            ("Mellow Optimist",    (1 - e) * v),
+            ("Deep Introspective", (1 - e) * (1 - v)),
+            ("Acoustic Soul",      o * v),
+            ("Electric Dreamer",   (1 - o) * e)
+        ]
         return scores.max { $0.1 < $1.1 }?.0 ?? "Eclectic Explorer"
     }
 

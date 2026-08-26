@@ -219,6 +219,7 @@ struct ArtistRow: View {
                 if let url = artist.imageURL {
                     AsyncImage(url: url) { $0.resizable().aspectRatio(contentMode: .fill) }
                         placeholder: { Theme.Palette.panel }
+                        .id(url)          // prevents SwiftUI reusing a stale image
                 } else {
                     Theme.Palette.panel.overlay(
                         Image(systemName: "music.mic").foregroundStyle(Theme.Palette.mist))

@@ -47,25 +47,39 @@ struct ArtistDetailSheet: View {
                     valueButton
                 }
                 .padding(Theme.Space.l)
+                .padding(.top, 44)      // clear the pinned close button
                 .padding(.bottom, 30)
             }
         }
+        // Close button pinned ABOVE the scroll view so it never scrolls
+        // away and is always tappable.
+        .overlay(alignment: .topTrailing) {
+            Button {
+                audio.stop()
+                dismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Theme.Palette.chalk)
+                    .frame(width: 36, height: 36)
+                    .background(.ultraThinMaterial, in: Circle())
+                    .overlay(Circle().stroke(Theme.Palette.hairline, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .padding(.trailing, Theme.Space.l)
+            .padding(.top, Theme.Space.m)
+        }
+        .presentationDragIndicator(.visible)
         .task { await load() }
         .onDisappear { audio.stop() }
     }
 
     private var hero: some View {
         VStack(alignment: .leading, spacing: Theme.Space.m) {
-            HStack {
-                Spacer()
-                Button { dismiss() } label: {
-                    Image(systemName: "xmark.circle.fill").font(.system(size: 26))
-                        .foregroundStyle(Theme.Palette.mist)
-                }
-            }
             if let url = heroImage ?? artist.imageURL {
                 AsyncImage(url: url) { $0.resizable().aspectRatio(contentMode: .fill) }
                     placeholder: { Theme.Palette.panel }
+                    .id(url)
                     .frame(height: 200)
                     .frame(maxWidth: .infinity)
                     .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))

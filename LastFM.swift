@@ -32,15 +32,20 @@ struct LFArtist: Identifiable, Hashable {
         return Double(playcount) / Double(listeners)
     }
     var superfanScore: Int {
-        // ~5 plays/listener is average; map to a 0-100 feel.
-        guard playsPerListener > 0 else { return 0 }
-        return Swift.min(Int((playsPerListener / 15.0) * 100), 100)
+        // Real Last.fm ratios run roughly 10-300 plays per listener, so a
+        // linear /15 scale pinned everyone at 100. Use a LOG scale across
+        // that real range for a spread that actually differentiates.
+        let ppl = playsPerListener
+        guard ppl > 1 else { return 0 }
+        let lo = log(10.0), hi = log(300.0)
+        let norm = (log(ppl) - lo) / (hi - lo)
+        return Swift.max(0, Swift.min(Int(norm * 100), 100))
     }
     var superfanLabel: String {
         switch superfanScore {
-        case 70...: return "Cult following"
-        case 45..<70: return "Devoted fans"
-        case 25..<45: return "Steady listeners"
+        case 85...: return "Cult following"
+        case 60..<85: return "Devoted fans"
+        case 35..<60: return "Steady listeners"
         default: return "Casual reach"
         }
     }
@@ -82,7 +87,7 @@ enum LastFM {
         comps.queryItems = q.map { URLQueryItem(name: $0.key, value: $0.value) }
         guard let url = comps.url else { return nil }
         var req = URLRequest(url: url)
-        req.setValue("Sonara/1.0", forHTTPHeaderField: "User-Agent")
+        req.setValue("Aimnubis/1.0", forHTTPHeaderField: "User-Agent")
         guard let (data, resp) = try? await URLSession.shared.data(for: req),
               (resp as? HTTPURLResponse)?.statusCode == 200 else { return nil }
         return data

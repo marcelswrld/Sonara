@@ -269,12 +269,35 @@ final class SpotifyAPI: ObservableObject {
     /// Real artist image via Spotify search — Last.fm only returns a
     /// placeholder star, so we resolve artwork here by name.
     func artistImage(named name: String) async -> URL? {
-        guard let d = try? await request("/search",
-                query: ["q": name, "type": "artist", "limit": "1"]) else { return nil }
+        // Search several results and VERIFY the name matches — taking the
+        // first hit blindly returned wrong photos (e.g. Michael Jackson for
+        // Olivia Rodrigo).
+        var d = try? await request("/search",
+                query: ["q": "artist:\"\(name)\"", "type": "artist", "limit": "5"])
+        if d == nil {
+            d = try? await request("/search",
+                query: ["q": name, "type": "artist", "limit": "5"])
+        }
+        guard let d else { return nil }
         struct SR: Codable { let artists: A?
             struct A: Codable { let items: [SPArtist] } }
-        guard let first = (try? JSONDecoder().decode(SR.self, from: d))?.artists?.items.first,
-              let s = first.images?.first?.url else { return nil }
+        guard let items = (try? JSONDecoder().decode(SR.self, from: d))?.artists?.items,
+              !items.isEmpty else { return nil }
+
+        func normalize(_ s: String) -> String {
+            s.lowercased()
+             .folding(options: .diacriticInsensitive, locale: .current)
+             .replacingOccurrences(of: "&", with: "and")
+             .components(separatedBy: CharacterSet.alphanumerics.inverted)
+             .joined()
+        }
+        let target = normalize(name)
+        // exact normalized match first, then a contains match
+        let match = items.first { normalize($0.name) == target }
+                 ?? items.first { normalize($0.name).contains(target) || target.contains(normalize($0.name)) }
+        // If nothing matches the requested artist, return NIL rather than a
+        // wrong photo — a placeholder is better than the wrong face.
+        guard let artist = match, let s = artist.images?.first?.url else { return nil }
         return URL(string: s)
     }
 
