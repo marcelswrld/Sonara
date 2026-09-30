@@ -182,6 +182,43 @@ enum LastFM {
         return ts.map { LFTrack(name: $0.name, playcount: Int($0.playcount ?? "0") ?? 0) }
     }
 
+    /// Artist search (powers the search bubble in Trends). Last.fm returns
+    /// a long tail of near-duplicates and tiny uploads, so keep the exact
+    /// match plus artists with a real audience, exact match first, then
+    /// biggest audience first.
+    static func searchArtists(_ query: String, limit: Int = 10) async -> [LFArtist] {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty,
+              let d = await get(["method": "artist.search", "artist": q, "limit": "30"]),
+              let json = (try? JSONSerialization.jsonObject(with: d, options: [])) as? [String: Any],
+              let results = json["results"] as? [String: Any],
+              let matches = results["artistmatches"] as? [String: Any] else { return [] }
+        // Usually a list; a single hit can come back as one object.
+        var raw: [[String: Any]] = []
+        if let list = matches["artist"] as? [[String: Any]] {
+            raw = list
+        } else if let one = matches["artist"] as? [String: Any] {
+            raw = [one]
+        }
+        var seen = Set<String>()
+        var found: [(artist: LFArtist, exact: Bool)] = []
+        for item in raw {
+            guard let name = item["name"] as? String, !name.isEmpty else { continue }
+            let listeners = Int((item["listeners"] as? String) ?? "") ?? 0
+            let exact = name.caseInsensitiveCompare(q) == .orderedSame
+            guard exact || listeners >= 1_000 else { continue }
+            guard seen.insert(name.lowercased()).inserted else { continue }
+            found.append((artist: LFArtist(name: name, listeners: listeners, playcount: 0,
+                                           imageURL: nil, genre: nil),
+                          exact: exact))
+        }
+        found.sort { a, b in
+            if a.exact != b.exact { return a.exact }
+            return a.artist.listeners > b.artist.listeners
+        }
+        return Array(found.prefix(limit).map { $0.artist })
+    }
+
     /// 1.2M -> "1.2M"
     static func compact(_ n: Int) -> String {
         switch n {
