@@ -20,13 +20,10 @@ struct DZTrack: Identifiable, Hashable {
 enum Deezer {
     private static let base = "https://api.deezer.com"
 
-    /// Strict query encoding: names like "Earth, Wind & Fire" or "+44" used
-    /// to cut the request short (& and + mean something else in a URL).
-    private static let queryAllowed: CharacterSet = {
-        var set = CharacterSet.alphanumerics
-        set.insert(charactersIn: "-._~")
-        return set
-    }()
+    /// Strict, ASCII-only query encoding: names like "Earth, Wind & Fire",
+    /// "+44" or Japanese names always reach Deezer intact (on iOS 16 too).
+    private static let queryAllowed = CharacterSet(charactersIn:
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
 
     private static func get(_ path: String, _ params: [(String, String)]) async -> Data? {
         let query = params.map { key, value in
