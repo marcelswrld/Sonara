@@ -195,7 +195,8 @@ struct ArtistDetailSheet: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(t.title).font(Theme.Type_.body(14, weight: .medium))
                                 .foregroundStyle(Theme.Palette.chalk).lineLimit(1)
-                            Text("30s preview").font(Theme.Type_.caption())
+                            Text(audio.failedID == t.id ? "This preview won't play right now" : "30s preview")
+                                .font(Theme.Type_.caption())
                                 .foregroundStyle(Theme.Palette.mist)
                         }
                         Spacer(minLength: 0)
@@ -253,6 +254,6 @@ struct ArtistDetailSheet: View {
         // real artwork from Spotify (Last.fm only returns a placeholder star)
         heroImage = await api.artistImage(named: artist.name)
         // playable 30s previews from Deezer (free, no auth)
-        previews = await Deezer.search(artist: artist.name, limit: 8)
+        previews = await Deezer.topTracks(forArtistNamed: artist.name, limit: 8)
     }
 }
